@@ -1,0 +1,617 @@
+/* Garuda Premium Temple Theme */
+
+:root {
+    --garuda-dark-brown: #2e1a11;
+    --garuda-gold: #c89b3c;
+    --garuda-gold-hover: #d9ad50;
+    --garuda-cream: #f8f6f2;
+    --garuda-white: #ffffff;
+    --garuda-text: #333333;
+
+    --status-green: #34A853;
+    --status-red: #EA4335;
+    --status-orange: #FBBC05;
+    --status-blue: #4285F4;
+    --status-purple: #8A2BE2;
+}
+
+body {
+    background-color: var(--garuda-cream) !important;
+    color: var(--garuda-text);
+    font-family: 'Inter', sans-serif;
+}
+
+/* ------------------------------------- */
+/* Sidebar & Top Navbar Layout Overrides */
+/* ------------------------------------- */
+
+/* Force the top navbar to span full width and have dark theme */
+.admin-header {
+    background-color: var(--garuda-dark-brown) !important;
+    height: 70px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    border-bottom: 2px solid var(--garuda-gold);
+}
+
+.admin-header .header-left,
+.admin-header .header-right {
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+}
+
+.admin-header .btn-light {
+    background: transparent !important;
+    border: none !important;
+    color: var(--garuda-white) !important;
+}
+
+.admin-header .btn-light:hover {
+    color: var(--garuda-gold) !important;
+}
+
+/* Sidebar positioned below the top navbar */
+.admin-sidebar {
+    background-color: var(--garuda-dark-brown) !important;
+    top: 70px;
+    height: calc(100vh - 70px);
+    width: 250px;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    position: fixed;
+    left: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* We don't need the old sidebar header anymore as it's in the top nav */
+.admin-sidebar .sidebar-header {
+    display: none !important;
+}
+
+.main-content {
+    margin-left: 250px;
+    margin-top: 70px;
+    padding: 20px;
+    background-color: var(--garuda-cream) !important;
+    min-height: calc(100vh - 70px);
+}
+
+/* ------------------------------------- */
+/* Sidebar Menu Styling                  */
+/* ------------------------------------- */
+.sidebar-menu {
+    padding: 10px 0;
+}
+
+.sidebar-menu li {
+    padding: 2px 15px;
+}
+
+.sidebar-menu a {
+    color: var(--garuda-white) !important;
+    border-radius: 8px;
+    padding: 12px 15px;
+    font-size: 15px;
+    /* Increased from 14px for visibility */
+    font-weight: 500;
+    letter-spacing: 0.8px;
+    /* Increased for better legibility */
+    transition: 0.2s;
+    border: 1px solid transparent;
+}
+
+.sidebar-menu a i {
+    color: var(--garuda-gold) !important;
+    font-size: 16px;
+    width: 24px;
+    text-align: center;
+}
+
+.sidebar-menu a:hover {
+    background-color: rgba(200, 155, 60, 0.15) !important;
+    /* Brighter hover */
+    color: var(--garuda-gold-hover) !important;
+    transform: none !important;
+}
+
+.sidebar-menu a.active {
+    background-color: rgba(200, 155, 60, 0.25) !important;
+    /* Brighter active state */
+    border: 1px solid var(--garuda-gold) !important;
+    color: var(--garuda-gold) !important;
+    transform: none !important;
+    font-weight: 600;
+}
+
+/* Sidebar Temple Image Background */
+.sidebar-bottom-image {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 400px;
+    background: url('../images/sidebar-bg.png') center bottom / cover no-repeat;
+    opacity: 0.8;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.sidebar-bottom-image::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, var(--garuda-dark-brown) 0%, transparent 100%);
+}
+
+/* ------------------------------------- */
+/* Top Custom Navigation Brand Area      */
+/* ------------------------------------- */
+.brand-area {
+    display: flex;
+    align-items: center;
+    color: var(--garuda-gold);
+    text-decoration: none;
+    padding-left: 15px;
+}
+
+.brand-area img {
+    height: 40px;
+    margin-right: 15px;
+}
+
+.brand-text {
+    line-height: 1.2;
+}
+
+.brand-text-top {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.brand-text-bottom {
+    font-size: 12px;
+    color: var(--garuda-white);
+    letter-spacing: 2px;
+}
+
+/* Center Om Namo Venkatesaya */
+.nav-center-text {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: var(--garuda-gold);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.nav-center-text img {
+    height: 24px;
+    margin-bottom: 2px;
+}
+
+.nav-center-text span {
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.header-right {
+    color: var(--garuda-white);
+    font-size: 14px;
+}
+
+.header-date {
+    margin-right: 20px;
+}
+
+/* ------------------------------------- */
+/* Hero Banner Overrides                 */
+/* ------------------------------------- */
+.hero-banner-container {
+    position: relative;
+    width: calc(100% + 40px);
+    margin-left: -20px;
+    margin-top: -20px;
+    height: 350px;
+    border-radius: 0;
+    margin-bottom: 20px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    background-color: var(--garuda-dark-brown);
+}
+
+.hero-banner-blur-bg {
+    display: none;
+}
+
+.hero-banner-img {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    z-index: 1;
+}
+
+.hero-banner-content {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hero-banner-content .title-1 {
+    color: var(--garuda-white);
+    font-size: 20px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.hero-banner-content .title-2 {
+    color: var(--garuda-white);
+    font-size: 16px;
+    margin: 0;
+}
+
+.hero-banner-logo {
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    text-align: center;
+}
+
+.hero-banner-logo img {
+    height: 120px;
+}
+
+
+/* ------------------------------------- */
+/* Card Styling                          */
+/* ------------------------------------- */
+.card {
+    background: var(--garuda-white) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+.card-header {
+    background: var(--garuda-white) !important;
+    border-bottom: 1px solid #f0f0f0 !important;
+    border-radius: 12px 12px 0 0 !important;
+}
+
+/* Clickable Stat Cards */
+.stat-card-link {
+    text-decoration: none;
+    display: block;
+    color: inherit;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 12px;
+}
+
+.stat-card-link:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(200, 155, 60, 0.2);
+}
+
+.stat-card-link .stat-card {
+    height: 100%;
+}
+
+/* ------------------------------------- */
+/* Table Styling                         */
+/* ------------------------------------- */
+.table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table thead th {
+    background-color: #fcfbfa !important;
+    color: var(--garuda-text) !important;
+    border-bottom: 2px solid #eaeaea !important;
+    font-weight: 600 !important;
+    text-transform: capitalize !important;
+    padding: 12px 15px !important;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table tbody td {
+    padding: 12px 15px !important;
+    vertical-align: middle !important;
+    border-bottom: 1px solid #f5f5f5 !important;
+}
+
+/* ------------------------------------- */
+/* Button Overrides                      */
+/* ------------------------------------- */
+.btn-primary,
+.btn-success,
+.btn-info {
+    border-radius: 6px !important;
+}
+
+/* Override specific inline styles cleanly */
+a.btn[style*="background:var(--temple-gold)"] {
+    background-color: var(--garuda-gold) !important;
+    border: 1px solid var(--garuda-gold) !important;
+    color: var(--garuda-dark-brown) !important;
+    font-weight: 600;
+}
+
+a.btn[style*="background:var(--temple-gold)"]:hover {
+    background-color: var(--garuda-gold-hover) !important;
+    color: var(--garuda-dark-brown) !important;
+}
+
+/* ------------------------------------- */
+/* Custom Badges (Status Colors)         */
+/* ------------------------------------- */
+.badge {
+    padding: 6px 10px !important;
+    border-radius: 4px !important;
+    font-weight: 600 !important;
+}
+
+.badge.bg-primary {
+    background-color: var(--status-purple) !important;
+    color: white !important;
+}
+
+.badge.bg-info {
+    background-color: var(--status-blue) !important;
+    color: white !important;
+}
+
+.badge.bg-success {
+    background-color: var(--status-green) !important;
+}
+
+.badge.bg-danger {
+    background-color: var(--status-red) !important;
+}
+
+.badge.bg-warning {
+    background-color: var(--status-orange) !important;
+    color: white !important;
+}
+
+.badge.bg-secondary {
+    background-color: #e0e0e0 !important;
+    color: var(--garuda-text) !important;
+}
+
+/* ------------------------------------- */
+/* Forms Overrides                       */
+/* ------------------------------------- */
+.form-control,
+.form-select {
+    border-radius: 6px !important;
+    border: 1px solid #ddd !important;
+    padding: 10px 15px !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--garuda-gold) !important;
+    box-shadow: 0 0 0 0.25rem rgba(200, 155, 60, 0.25) !important;
+}
+
+/* ------------------------------------- */
+/* Module Art Banners                    */
+/* ------------------------------------- */
+.module-art-banner {
+    height: 120px;
+    border-radius: 15px;
+    margin-bottom: 20px;
+    background-color: var(--garuda-dark-brown);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    padding: 0 30px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+}
+
+.module-art-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-position: center right;
+    background-size: cover;
+    background-repeat: no-repeat;
+    opacity: 0.5;
+    /* Watermark effect */
+    z-index: 1;
+}
+
+/* Distinct Arts for each module */
+.banner-devotees::before {
+    background-image: url('../images/devotees-art.jpg');
+}
+
+.banner-bookings::before {
+    background-image: url('../images/bookings-art.jpg');
+}
+
+.banner-phone::before {
+    background-image: url('../images/phone-usages-art.jpg');
+    opacity: 0.6;
+}
+
+.banner-investments::before {
+    background-image: url('../images/investments-art.jpg');
+}
+
+.banner-revenues::before {
+    background-image: url('../images/revenues-art.jpg');
+    opacity: 0.6;
+}
+
+.module-art-banner .banner-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    align-items: center;
+}
+
+.module-art-banner .banner-title {
+    color: var(--garuda-gold);
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+}
+
+.module-art-banner .banner-title i {
+    margin-right: 15px;
+    font-size: 32px;
+    color: var(--garuda-white);
+}
+
+/* ------------------------------------- */
+/* Responsive Mobile Layout              */
+/* ------------------------------------- */
+
+/* Sidebar Backdrop */
+.sidebar-backdrop {
+    position: fixed;
+    top: 70px;
+    left: 0;
+    width: 100vw;
+    height: calc(100vh - 70px);
+    background-color: rgba(0, 0, 0, 0.6);
+    z-index: 1040;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-backdrop.show {
+    display: block;
+    opacity: 1;
+}
+
+@media (max-width: 991.98px) {
+    /* Navbar Adjustments */
+    .admin-header {
+        padding: 0 15px;
+    }
+    
+    .brand-area {
+        padding-left: 0;
+    }
+    
+    .brand-area img {
+        height: 32px;
+        margin-right: 10px;
+    }
+    
+    .brand-text-top {
+        font-size: 14px;
+        letter-spacing: 0.5px;
+    }
+    
+    .brand-text-bottom {
+        font-size: 10px;
+        letter-spacing: 1px;
+    }
+    
+    /* Off-canvas Sidebar */
+    .admin-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        z-index: 1045;
+    }
+    
+    .admin-sidebar.show {
+        transform: translateX(0);
+    }
+    
+    /* Main Content */
+    .main-content {
+        margin-left: 0;
+        padding: 15px;
+    }
+    
+    /* Dashboard Hero Banner */
+    .hero-banner-container {
+        height: 200px;
+        width: calc(100% + 30px);
+        margin-left: -15px;
+        margin-top: -15px;
+    }
+    
+    .hero-banner-content .title-1 {
+        font-size: 16px;
+    }
+    
+    .hero-banner-content .title-2 {
+        font-size: 14px;
+    }
+    
+    .hero-banner-logo {
+        right: 20px;
+    }
+    
+    .hero-banner-logo img {
+        height: 80px;
+    }
+    
+    /* Module Art Banners */
+    .module-art-banner {
+        height: auto;
+        min-height: 100px;
+        padding: 20px;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .module-art-banner .banner-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    .module-art-banner .banner-title {
+        font-size: 22px;
+    }
+    
+    .module-art-banner .banner-title i {
+        font-size: 24px;
+        margin-right: 10px;
+    }
+    
+    /* Tables */
+    .table-responsive {
+        border: 0;
+    }
+}
