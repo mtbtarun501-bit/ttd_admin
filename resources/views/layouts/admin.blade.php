@@ -30,6 +30,9 @@
             <button class="btn btn-light d-lg-none me-2" id="mobileMenuToggle">
                 <i class="fas fa-bars"></i>
             </button>
+            <button class="btn btn-light d-none d-lg-inline-block me-2" id="desktopMenuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
             <a href="{{ route('dashboard') }}" class="brand-area">
                 <div style="font-size: 28px; color: var(--garuda-gold); margin-right: 15px;"><i class="fa-solid fa-om"></i></div>
                 <div class="brand-text">
@@ -74,63 +77,64 @@
     <aside class="admin-sidebar" id="adminSidebar">
         <ul class="sidebar-menu">
             <li>
-                <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
-                    <i class="fas fa-home"></i> Dashboard
+                <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Dashboard">
+                    <i class="fas fa-home"></i> <span class="nav-text">Dashboard</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('devotees.index') }}" class="{{ request()->routeIs('devotees.*') ? 'active' : '' }}">
-                    <i class="fas fa-users"></i> Devotees
+                <a href="{{ route('devotees.index') }}" class="{{ request()->routeIs('devotees.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Devotees">
+                    <i class="fas fa-users"></i> <span class="nav-text">Devotees</span>
                 </a>
             </li>
             @hasanyrole('Super Admin|Operator')
             <li>
-                <a href="{{ route('bookings.index') }}" class="{{ request()->routeIs('bookings.*') ? 'active' : '' }}">
-                    <i class="fas fa-calendar-check"></i> Bookings
+                <a href="{{ route('bookings.index') }}" class="{{ request()->routeIs('bookings.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Bookings">
+                    <i class="fas fa-calendar-check"></i> <span class="nav-text">Bookings</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('phone-usages.index') }}" class="{{ request()->routeIs('phone-usages.*') ? 'active' : '' }}">
-                    <i class="fas fa-mobile-alt"></i> Phone Usage
+                <a href="{{ route('phone-usages.index') }}" class="{{ request()->routeIs('phone-usages.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Phone Usage">
+                    <i class="fas fa-mobile-alt"></i> <span class="nav-text">Phone Usage</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('investments.index') }}" class="{{ request()->routeIs('investments.*') ? 'active' : '' }}">
-                    <i class="fas fa-coins"></i> Investments
+                <a href="{{ route('investments.index') }}" class="{{ request()->routeIs('investments.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Investments">
+                    <i class="fas fa-coins"></i> <span class="nav-text">Investments</span>
                 </a>
             </li>
+        
             <li>
-                <a href="{{ route('revenues.index') }}" class="{{ request()->routeIs('revenues.*') ? 'active' : '' }}">
-                    <i class="fas fa-chart-line"></i> Revenue
+                <a href="{{ route('revenues.index') }}" class="{{ request()->routeIs('revenues.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Revenue">
+                    <i class="fas fa-chart-line"></i> <span class="nav-text">Revenue</span>
                 </a>
             </li>
             
             <hr style="border-color: rgba(255,255,255,0.1); margin: 15px 20px;">
             
             <li>
-                <a href="#">
-                    <i class="fas fa-file-alt"></i> Reports
+                <a href="#" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Reports">
+                    <i class="fas fa-file-alt"></i> <span class="nav-text">Reports</span>
                 </a>
             </li>
             <li>
-                <a href="{{ route('profile.edit') }}">
-                    <i class="fas fa-cog"></i> Settings
+                <a href="{{ route('profile.edit') }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Settings">
+                    <i class="fas fa-cog"></i> <span class="nav-text">Settings</span>
                 </a>
             </li>
             @endhasanyrole
             
             @hasrole('Super Admin')
             <li>
-                <a href="{{ route('users.index') }}" class="{{ request()->routeIs('users.*') ? 'active' : '' }}">
-                    <i class="fas fa-users-cog"></i> Users
+                <a href="{{ route('users.index') }}" class="{{ request()->routeIs('users.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Users">
+                    <i class="fas fa-users-cog"></i> <span class="nav-text">Users</span>
                 </a>
             </li>
             @endhasrole
             <li>
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
-                    <a href="{{ route('logout') }}" onclick="event.preventDefault(); this.closest('form').submit();">
-                        <i class="fas fa-sign-out-alt"></i> Logout
+                    <a href="{{ route('logout') }}" onclick="event.preventDefault(); this.closest('form').submit();" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Logout">
+                        <i class="fas fa-sign-out-alt"></i> <span class="nav-text">Logout</span>
                     </a>
                 </form>
             </li>
@@ -161,26 +165,70 @@
     
     @stack('scripts')
     
-    <!-- Mobile Sidebar Toggle Script -->
+    <!-- Sidebar Interaction Script -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const mobileToggle = document.getElementById('mobileMenuToggle');
+            const body = document.body;
             const sidebar = document.getElementById('adminSidebar');
+            const desktopToggle = document.getElementById('desktopMenuToggle');
+            const mobileToggle = document.getElementById('mobileMenuToggle');
             const backdrop = document.getElementById('sidebarBackdrop');
+            
+            // 1. Desktop Pinning Logic (LocalStorage)
+            const isPinned = localStorage.getItem('sidebarPinned') === 'true';
+            if (isPinned) {
+                body.classList.add('sidebar-pinned');
+            }
+            
+            if (desktopToggle) {
+                desktopToggle.addEventListener('click', function() {
+                    body.classList.toggle('sidebar-pinned');
+                    const currentlyPinned = body.classList.contains('sidebar-pinned');
+                    localStorage.setItem('sidebarPinned', currentlyPinned);
+                    updateTooltips();
+                });
+            }
 
+            // 2. Mobile Offcanvas Logic
             if(mobileToggle && sidebar && backdrop) {
                 mobileToggle.addEventListener('click', function() {
                     sidebar.classList.toggle('show');
                     backdrop.classList.toggle('show');
-                    document.body.classList.toggle('overflow-hidden');
+                    body.classList.toggle('overflow-hidden');
                 });
 
                 backdrop.addEventListener('click', function() {
                     sidebar.classList.remove('show');
                     backdrop.classList.remove('show');
-                    document.body.classList.remove('overflow-hidden');
+                    body.classList.remove('overflow-hidden');
                 });
             }
+
+            // 3. Dynamic Tooltips Logic
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            let tooltipList = [];
+
+            function updateTooltips() {
+                // Destroy existing tooltips
+                tooltipList.forEach(t => t.dispose());
+                tooltipList = [];
+
+                // Only enable tooltips if sidebar is NOT pinned and window is large
+                if (window.innerWidth >= 992 && !body.classList.contains('sidebar-pinned')) {
+                    tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                        return new bootstrap.Tooltip(tooltipTriggerEl, {
+                            boundary: document.body,
+                            trigger: 'hover'
+                        });
+                    });
+                }
+            }
+
+            // Initialize tooltips on load
+            updateTooltips();
+
+            // Re-evaluate tooltips on window resize
+            window.addEventListener('resize', updateTooltips);
         });
     </script>
 </body>

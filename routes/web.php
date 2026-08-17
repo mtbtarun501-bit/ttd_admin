@@ -40,6 +40,11 @@ Route::middleware(['auth', 'role:Super Admin|Operator'])->group(function () {
     
     Route::get('revenues/export', [App\Http\Controllers\RevenueController::class, 'export'])->name('revenues.export');
     Route::resource('revenues', App\Http\Controllers\RevenueController::class);
+
+    // Indian Stocks Module
+    Route::get('api/indian-stocks/live', [App\Http\Controllers\IndianStockController::class, 'getLivePrices'])->name('api.indian-stocks.live');
+    Route::get('indian-stocks/export', [App\Http\Controllers\IndianStockController::class, 'export'])->name('indian-stocks.export');
+    Route::resource('indian-stocks', App\Http\Controllers\IndianStockController::class);
 });
 
 // Tier 3: Accessible ONLY by Super Admins
