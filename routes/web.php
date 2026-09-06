@@ -20,10 +20,20 @@ Route::middleware(['auth', 'role:Super Admin|Operator|User'])->group(function ()
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     
+    Route::get('agent-accounts', [App\Http\Controllers\AgentAccountController::class, 'index'])->name('agent-accounts.index');
+    Route::get('agent-accounts/{id}', [App\Http\Controllers\AgentAccountController::class, 'show'])->name('agent-accounts.show');
+
+    // Settings Module
+    Route::get('/settings/pricing', [App\Http\Controllers\SettingsController::class, 'pricing'])->name('settings.pricing');
+    Route::post('/settings/pricing', [App\Http\Controllers\SettingsController::class, 'updatePricing'])->name('settings.pricing.update');
+    
     // Devotees Module
     Route::get('devotees/export', [App\Http\Controllers\DevoteeController::class, 'export'])->name('devotees.export');
     Route::get('devotees/export-json', [App\Http\Controllers\DevoteeController::class, 'exportJson'])->name('devotees.exportJson');
+    Route::get('devotees/import/template', [App\Http\Controllers\DevoteeController::class, 'downloadTemplate'])->name('devotees.import_template');
+    Route::post('devotees/import', [App\Http\Controllers\DevoteeController::class, 'import'])->name('devotees.import');
     Route::get('devotees/{devotee}/family/create', [App\Http\Controllers\DevoteeController::class, 'createFamilyMember'])->name('devotees.create_family_member');
+    Route::post('devotees/{devotee}/quick-booking', [App\Http\Controllers\DevoteeController::class, 'quickBooking'])->name('devotees.quick_booking');
     Route::get('api/devotees/{devotee}/family', [App\Http\Controllers\BookingController::class, 'getFamilyMembers'])->name('api.devotees.family');
     Route::resource('devotees', App\Http\Controllers\DevoteeController::class);
 });
@@ -39,6 +49,12 @@ Route::middleware(['auth', 'role:Super Admin|Operator'])->group(function () {
     Route::resource('investments', App\Http\Controllers\InvestmentController::class);
     
     Route::get('revenues/export', [App\Http\Controllers\RevenueController::class, 'export'])->name('revenues.export');
+    
+    Route::get('revenues/import', [App\Http\Controllers\RevenueImportController::class, 'index'])->name('revenues.import');
+    Route::post('revenues/import/preview', [App\Http\Controllers\RevenueImportController::class, 'preview'])->name('revenues.import.preview');
+    Route::post('revenues/import/confirm', [App\Http\Controllers\RevenueImportController::class, 'confirm'])->name('revenues.import.confirm');
+    
+    Route::delete('revenues/agent/{agent_name}', [App\Http\Controllers\RevenueController::class, 'destroyAgent'])->name('revenues.destroyAgent');
     Route::resource('revenues', App\Http\Controllers\RevenueController::class);
 
     // Indian Stocks Module

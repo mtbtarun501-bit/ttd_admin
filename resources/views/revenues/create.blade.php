@@ -22,10 +22,14 @@
             <form action="{{ route('revenues.store') }}" method="POST">
                 @csrf
                 <div class="row g-4">
-                    
                     <div class="col-md-6">
-                        <label class="form-label fw-bold">Revenue Source <span class="text-danger">*</span></label>
-                        <input type="text" name="source" class="form-control" value="{{ old('source') }}" placeholder="e.g., Hundi Collection, Ticket Sales" required>
+                        <label class="form-label fw-bold">Agent / Person Name</label>
+                        <input type="text" name="agent_name" class="form-control" value="{{ old('agent_name') }}" placeholder="e.g., Nikhil (Optional)">
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Revenue Source / Service <span class="text-danger">*</span></label>
+                        <input type="text" name="source" class="form-control" value="{{ old('source') }}" placeholder="e.g., Ticket Sales, Commission" required>
                     </div>
 
                     <div class="col-md-6">

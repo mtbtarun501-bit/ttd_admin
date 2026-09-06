@@ -25,7 +25,7 @@
                         @if($devotee->is_head_of_family)
                             <span class="badge bg-primary ms-2 fs-6"><i class="fas fa-crown"></i> Head of Family</span>
                         @elseif($devotee->head_devotee_id && $devotee->headFamilyMember)
-                            <span class="badge bg-info ms-2 fs-6">Family of: {{ $devotee->headFamilyMember->name }}</span>
+                            <span class="badge bg-info ms-2 fs-6">Referred Agent: {{ $devotee->headFamilyMember->name }}</span>
                         @endif
                     </h5>
                 </div>

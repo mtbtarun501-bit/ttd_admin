@@ -109,6 +109,12 @@
                 </a>
             </li>
             
+            <li>
+                <a href="{{ route('agent-accounts.index') }}" class="{{ request()->routeIs('agent-accounts.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Agent Accounts">
+                    <i class="fas fa-file-invoice-dollar"></i> <span class="nav-text">Agent Accounts</span>
+                </a>
+            </li>
+            
             <hr style="border-color: rgba(255,255,255,0.1); margin: 15px 20px;">
             
             <li>
@@ -117,8 +123,13 @@
                 </a>
             </li>
             <li>
-                <a href="{{ route('profile.edit') }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Settings">
-                    <i class="fas fa-cog"></i> <span class="nav-text">Settings</span>
+                <a href="{{ route('profile.edit') }}" class="{{ request()->routeIs('profile.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Profile">
+                    <i class="fas fa-user-cog"></i> <span class="nav-text">Profile</span>
+                </a>
+            </li>
+            <li>
+                <a href="{{ route('settings.pricing') }}" class="{{ request()->routeIs('settings.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Pricing Settings">
+                    <i class="fas fa-money-check-alt"></i> <span class="nav-text">Pricing Settings</span>
                 </a>
             </li>
             @endhasanyrole

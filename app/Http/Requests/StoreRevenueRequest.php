@@ -14,6 +14,7 @@ class StoreRevenueRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'agent_name' => 'nullable|string|max:255',
             'source' => 'required|string|max:255',
             'amount' => 'required|numeric|min:0',
             'revenue_date' => 'required|date',

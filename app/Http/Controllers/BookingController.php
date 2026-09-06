@@ -36,8 +36,17 @@ class BookingController extends Controller
                 ->addColumn('booking_type', function($row){
                     return $row->bookingType->name ?? 'N/A';
                 })
+                ->addColumn('ticket_count', function($row){
+                    return $row->ticket_count ?? 'N/A';
+                })
+                ->addColumn('total_amount', function($row){
+                    return $row->total_amount ? '₹' . number_format($row->total_amount, 2) : 'N/A';
+                })
                 ->addColumn('booked_by', function($row){
                     return $row->creator->name ?? 'System';
+                })
+                ->addColumn('booked_by_agent', function($row){
+                    return $row->booked_by_name ?? 'N/A';
                 })
                 ->editColumn('status', function($row){
                     if (strtolower($row->status) === 'pending') {

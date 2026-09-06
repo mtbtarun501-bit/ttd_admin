@@ -29,10 +29,23 @@ class BookingService
 
         // Phone usage eligibility check was moved to a separate module.
 
-        // Generate unique booking number
         $data['booking_no'] = 'SGB-' . strtoupper(Str::random(8));
         $data['created_by'] = $data['created_by'] ?? auth()->id();
         $data['status'] = 'pending';
+
+        $ticketCount = isset($data['attendee_ids']) && is_array($data['attendee_ids']) 
+            ? count($data['attendee_ids']) 
+            : 1;
+        $data['ticket_count'] = $ticketCount;
+
+        $bookingType = \App\Models\BookingType::find($data['booking_type_id']);
+        if ($bookingType) {
+            $data['service_charge'] = $bookingType->commission_rate * $ticketCount;
+            $data['total_amount'] = ($bookingType->price * $ticketCount) + $data['service_charge'];
+        } else {
+            $data['service_charge'] = 0;
+            $data['total_amount'] = 0;
+        }
 
         $booking = $this->repository->create($data);
         

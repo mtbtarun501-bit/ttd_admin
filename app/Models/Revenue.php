@@ -11,7 +11,7 @@ class Revenue extends Model
     use LogsActivity;
 
     protected $fillable = [
-        'source', 'amount', 'revenue_date', 'remarks', 'created_by'
+        'agent_name', 'source', 'amount', 'revenue_date', 'remarks', 'created_by', 'revenue_import_booking_id'
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -20,5 +20,10 @@ class Revenue extends Model
         ->logFillable()
         ->logOnlyDirty()
         ->dontSubmitEmptyLogs();
+    }
+
+    public function importBooking()
+    {
+        return $this->belongsTo(RevenueImportBooking::class, 'revenue_import_booking_id');
     }
 }

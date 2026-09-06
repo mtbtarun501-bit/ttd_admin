@@ -25,7 +25,7 @@
                     <div class="col-md-12 mb-3">
                         <div class="form-check form-switch fs-5">
                             <input class="form-check-input" type="checkbox" name="is_head_of_family" id="isHeadOfFamily" value="1" {{ old('is_head_of_family') ? 'checked' : '' }}>
-                            <label class="form-check-label fw-bold text-primary" for="isHeadOfFamily">Mark as Head of Family</label>
+                            <label class="form-check-label fw-bold text-primary" for="isHeadOfFamily">Is Referred Agent? (Head of Family)</label>
                         </div>
                     </div>
 

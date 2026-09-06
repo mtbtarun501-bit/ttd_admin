@@ -28,12 +28,12 @@
                             <td>{{ $booking->devotee->name ?? 'N/A' }}</td>
                         </tr>
                         <tr>
-                            <td class="text-muted fw-bold">Booking Date:</td>
-                            <td>{{ \Carbon\Carbon::parse($booking->booking_date)->format('d M Y') }}</td>
+                            <td class="text-muted fw-bold">Booked By (Agent):</td>
+                            <td><span class="badge bg-primary">{{ $booking->booked_by_name ?? 'N/A' }}</span></td>
                         </tr>
                         <tr>
-                            <td class="text-muted fw-bold">Preferred Date:</td>
-                            <td>{{ $booking->preferred_date ? \Carbon\Carbon::parse($booking->preferred_date)->format('d M Y') : 'N/A' }}</td>
+                            <td class="text-muted fw-bold">Booking Date:</td>
+                            <td>{{ \Carbon\Carbon::parse($booking->booking_date)->format('d M Y') }}</td>
                         </tr>
                         <tr>
                             <td class="text-muted fw-bold">Status:</td>
@@ -48,6 +48,23 @@
                                     <span class="badge bg-secondary">{{ ucfirst($booking->status) }}</span>
                                 @endif
                             </td>
+                        </tr>
+                    </table>
+                    
+                    <hr class="text-muted opacity-25">
+                    
+                    <table class="table table-borderless">
+                        <tr>
+                            <td class="text-muted fw-bold">Ticket Count:</td>
+                            <td class="fw-bold">{{ $booking->ticket_count ?? 'N/A' }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted fw-bold">Commission/Service Charge:</td>
+                            <td class="fw-bold text-danger">₹{{ number_format($booking->service_charge, 2) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted fw-bold">Total Amount:</td>
+                            <td class="fw-bold text-success fs-5">₹{{ number_format($booking->total_amount, 2) }}</td>
                         </tr>
                     </table>
 

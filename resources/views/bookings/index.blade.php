@@ -25,7 +25,9 @@
                             <th>Devotee Name</th>
                             <th>Booking Type</th>
                             <th>Booking Date</th>
-                            <th>Booked By (Admin)</th>
+                            <th>Tickets</th>
+                            <th>Total Amount</th>
+                            <th>Booked By (Agent)</th>
                             <th>Status</th>
                             <th width="150px">Actions</th>
                         </tr>
@@ -98,7 +100,9 @@ $(document).ready(function() {
             {data: 'devotee_name', name: 'devotee.name'},
             {data: 'booking_type', name: 'bookingType.name'},
             {data: 'booking_date', name: 'booking_date'},
-            {data: 'booked_by', name: 'creator.name'},
+            {data: 'ticket_count', name: 'ticket_count'},
+            {data: 'total_amount', name: 'total_amount'},
+            {data: 'booked_by_agent', name: 'booked_by_name'},
             {data: 'status', name: 'status'},
             {data: 'action', name: 'action', orderable: false, searchable: false},
         ]

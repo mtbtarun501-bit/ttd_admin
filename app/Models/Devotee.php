@@ -61,4 +61,9 @@ class Devotee extends Model
     {
         return $this->belongsToMany(Booking::class, 'booking_devotee');
     }
+
+    public function primaryBookings()
+    {
+        return $this->hasMany(Booking::class, 'devotee_id');
+    }
 }
