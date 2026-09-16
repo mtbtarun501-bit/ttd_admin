@@ -42,6 +42,7 @@ Route::middleware(['auth', 'role:Super Admin|Operator|User'])->group(function ()
 Route::middleware(['auth', 'role:Super Admin|Operator'])->group(function () {
     // Other Modules
     Route::post('phone-usages/{phone_usage}/bookings', [App\Http\Controllers\PhoneUsageController::class, 'storeBooking'])->name('phone-usages.bookings.store');
+    Route::get('phone-usages/export', [App\Http\Controllers\PhoneUsageController::class, 'export'])->name('phone-usages.export');
     Route::resource('phone-usages', App\Http\Controllers\PhoneUsageController::class);
     
     Route::patch('bookings/{booking}/status', [App\Http\Controllers\BookingController::class, 'updateStatus'])->name('bookings.updateStatus');

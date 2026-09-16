@@ -8,8 +8,10 @@ use App\Services\PhoneUsageService;
 use App\Http\Requests\StorePhoneUsageRequest;
 use App\Http\Requests\UpdatePhoneUsageRequest;
 use App\Http\Requests\StorePhoneUsageBookingRequest;
+use App\Exports\PhoneUsageExport;
 use Illuminate\Http\Request;
 use Yajra\DataTables\Facades\DataTables;
+use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 
 class PhoneUsageController extends Controller
@@ -71,6 +73,11 @@ class PhoneUsageController extends Controller
     {
         $sevas = SevaType::orderBy('display_order')->get();
         return view('phone_usages.create', compact('sevas'));
+    }
+
+    public function export()
+    {
+        return Excel::download(new PhoneUsageExport($this->phoneUsageService), 'phone_usages_' . date('Y_m_d') . '.xlsx');
     }
 
     public function store(StorePhoneUsageRequest $request)

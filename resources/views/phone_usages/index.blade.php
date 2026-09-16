@@ -6,6 +6,7 @@
         <div class="banner-content">
             <h2 class="banner-title"><i class="fas fa-mobile-alt"></i> Phone Usage Management</h2>
             <div>
+                <a href="{{ route('phone-usages.export') }}" class="btn btn-success me-2"><i class="fas fa-file-excel"></i> Export Excel</a>
                 <a href="{{ route('phone-usages.create') }}" class="btn text-white" style="background:var(--temple-gold);">
                     <i class="fas fa-plus"></i> Add Mobile Number
                 </a>
