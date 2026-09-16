@@ -16,8 +16,9 @@ class DevoteeImport implements ToModel, WithHeadingRow
     */
     public function model(array $row)
     {
-        // Require name and phone at least
-        if (empty($row['name']) || empty($row['phone'])) {
+        // Require at least a name. In the monthly batch format, only group
+        // contacts may have a phone, so individual phones are optional.
+        if (empty($row['name'])) {
             return null;
         }
 

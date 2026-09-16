@@ -11,6 +11,7 @@ use App\Http\Requests\StoreDevoteeRequest;
 use App\Http\Requests\UpdateDevoteeRequest;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\DevoteeExport;
 
@@ -53,7 +54,9 @@ class DevoteeController extends Controller
         ]);
 
         try {
-            Excel::import(new DevoteeImport, $request->file('import_file'));
+            DB::transaction(function () use ($request) {
+                Excel::import(new DevoteeImport, $request->file('import_file'));
+            });
             return redirect()->back()->with('success', 'Devotees imported successfully.');
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Import Error: " . $e->getMessage());
@@ -152,6 +155,8 @@ class DevoteeController extends Controller
                     $btn = '';
                     
                     $btn .= '<button type="button" class="btn btn-sm btn-warning me-1 manage-booking-btn" data-id="'.$row->id.'" data-name="'.htmlspecialchars($row->name).'" title="Manage Booking"><i class="fas fa-ticket-alt"></i></button>';
+                    $btn .= '<a href="'.route('devotees.edit', $row->id).'" class="btn btn-sm btn-primary me-1" title="Edit Details"><i class="fas fa-edit"></i></a>';
+                    $btn .= '<button type="button" class="btn btn-sm btn-outline-primary me-1 edit-referred-btn" data-id="'.$row->id.'" data-name="'.htmlspecialchars($row->name).'" data-referred="'.htmlspecialchars($row->is_head_of_family ? $row->name : ($row->headFamilyMember->name ?? '')).'" title="Edit Referred Name"><i class="fas fa-user-tag"></i></button>';
                     $btn .= '<a href="'.route('devotees.show', $row->id).'" class="btn btn-sm btn-info text-white me-1" title="View"><i class="fas fa-eye"></i></a>';
                     $btn .= '<form action="'.route('devotees.destroy', $row->id).'" method="POST" style="display:inline-block;">
                                 '.csrf_field().'
@@ -204,7 +209,9 @@ class DevoteeController extends Controller
         $devotee = Devotee::with(['headFamilyMember', 'familyMembers', 'preferredBookingType'])->findOrFail($id);
         $this->authorizeAccess($devotee);
 
-        return view('devotees.show', compact('devotee'));
+        $agents = Devotee::where('is_head_of_family', true)->get();
+
+        return view('devotees.show', compact('devotee', 'agents'));
     }
 
     public function edit($id)
@@ -254,6 +261,64 @@ class DevoteeController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Booking saved successfully. Amount used by ' . $request->booked_by_name . ': ₹' . number_format($totalAmount, 2)
+        ]);
+    }
+
+    public function updateReferred(Request $request, $id)
+    {
+        $devotee = Devotee::findOrFail($id);
+        $this->authorizeAccess($devotee);
+
+        $request->validate([
+            'referred_name' => 'nullable|string|max:255',
+        ]);
+
+        $referredName = trim((string) $request->input('referred_name', ''));
+
+        if ($devotee->is_head_of_family) {
+            if ($referredName === '') {
+                return response()->json(['success' => false, 'message' => 'Agent name cannot be empty.'], 422);
+            }
+            $devotee->update(['name' => $referredName]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Agent renamed successfully.',
+                'name' => $devotee->name,
+                'referred' => $devotee->name,
+            ]);
+        }
+
+        if ($referredName === '') {
+            $devotee->update(['head_devotee_id' => null]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Devotee is now a standalone member.',
+                'referred' => '',
+            ]);
+        }
+
+        $agent = Devotee::where('name', 'like', $referredName)->first();
+        if ($agent) {
+            if (!$agent->is_head_of_family) {
+                $agent->is_head_of_family = true;
+                $agent->save();
+            }
+        } else {
+            $agent = Devotee::create([
+                'user_id' => auth()->id() ?? 1,
+                'name' => $referredName,
+                'age' => 30,
+                'gender' => 'Unknown',
+                'is_head_of_family' => true,
+                'remarks' => 'Auto-created from Referred edit',
+            ]);
+        }
+
+        $devotee->update(['head_devotee_id' => $agent->id]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Referred updated successfully.',
+            'referred' => $agent->name,
         ]);
     }
 

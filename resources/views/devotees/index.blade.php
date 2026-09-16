@@ -30,7 +30,8 @@
                             <th>Phone</th>
                             <th>City</th>
                             <th>State</th>
-                            <th width="150px">Actions</th>
+                            <th>Remarks</th>
+                            <th width="230px">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -160,6 +161,8 @@
     </div>
 </div>
 
+@include('devotees.partials.edit_referred_modal')
+
 @endsection
 
 @push('scripts')
@@ -181,6 +184,10 @@ $(document).ready(function() {
             {data: 'phone', name: 'phone'},
             {data: 'city', name: 'city'},
             {data: 'state', name: 'state'},
+            {data: 'remarks', name: 'remarks', render: function(data) {
+                if (!data) return '';
+                return data.length > 60 ? '<span title="' + data + '">' + data.substring(0, 60) + '&hellip;</span>' : data;
+            }},
             {data: 'action', name: 'action', orderable: false, searchable: false},
         ]
     });

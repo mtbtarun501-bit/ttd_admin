@@ -34,6 +34,7 @@ Route::middleware(['auth', 'role:Super Admin|Operator|User'])->group(function ()
     Route::post('devotees/import', [App\Http\Controllers\DevoteeController::class, 'import'])->name('devotees.import');
     Route::get('devotees/{devotee}/family/create', [App\Http\Controllers\DevoteeController::class, 'createFamilyMember'])->name('devotees.create_family_member');
     Route::post('devotees/{devotee}/quick-booking', [App\Http\Controllers\DevoteeController::class, 'quickBooking'])->name('devotees.quick_booking');
+    Route::patch('devotees/{devotee}/referred', [App\Http\Controllers\DevoteeController::class, 'updateReferred'])->name('devotees.update_referred');
     Route::get('api/devotees/{devotee}/family', [App\Http\Controllers\BookingController::class, 'getFamilyMembers'])->name('api.devotees.family');
     Route::resource('devotees', App\Http\Controllers\DevoteeController::class);
 });

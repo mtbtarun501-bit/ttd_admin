@@ -26,6 +26,7 @@
                             <span class="badge bg-primary ms-2 fs-6"><i class="fas fa-crown"></i> Head of Family</span>
                         @elseif($devotee->head_devotee_id && $devotee->headFamilyMember)
                             <span class="badge bg-info ms-2 fs-6">Referred Agent: {{ $devotee->headFamilyMember->name }}</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-2 edit-referred-btn" data-id="{{ $devotee->id }}" data-name="{{ $devotee->name }}" data-referred="{{ $devotee->headFamilyMember->name }}" title="Edit Referred Name"><i class="fas fa-user-tag"></i> Edit</button>
                         @endif
                     </h5>
                 </div>
@@ -138,4 +139,6 @@
 
     </div>
 </div>
+
+@include('devotees.partials.edit_referred_modal')
 @endsection

@@ -52,8 +52,10 @@ class DevoteeExport implements FromCollection, WithHeadings, WithMapping
             'Aadhaar Number',
             'Email',
             'Phone Number',
+            'Referred By',
             'City',
             'State',
+            'Remarks',
             'Registered At'
         ];
     }
@@ -68,8 +70,10 @@ class DevoteeExport implements FromCollection, WithHeadings, WithMapping
             $devotee->aadhaar,
             $devotee->email,
             $devotee->phone,
+            $devotee->headFamilyMember->name ?? '',
             $devotee->city,
             $devotee->state,
+            $devotee->remarks,
             $devotee->created_at->format('Y-m-d H:i:s'),
         ];
     }
