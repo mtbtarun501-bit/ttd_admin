@@ -15,6 +15,7 @@ class PhoneUsageBookingHistory extends Model
         'booking_date',
         'remarks',
         'created_by',
+        'booking_id',
     ];
 
     protected $casts = [
@@ -34,5 +35,10 @@ class PhoneUsageBookingHistory extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function booking()
+    {
+        return $this->belongsTo(Booking::class);
     }
 }

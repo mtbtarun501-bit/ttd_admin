@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Repositories\BookingRepository;
 use App\Models\Devotee;
+use App\Models\Agent;
 use Illuminate\Support\Str;
 
 class BookingService
@@ -40,9 +41,15 @@ class BookingService
 
         $bookingType = \App\Models\BookingType::find($data['booking_type_id']);
         if ($bookingType) {
-            $data['service_charge'] = $bookingType->commission_rate * $ticketCount;
+            $agentType = null;
+            if (!empty($data['agent_id'])) {
+                $agentType = Agent::find($data['agent_id'])?->agent_type;
+            }
+            $data['agent_id'] = $data['agent_id'] ?? null;
+            $data['service_charge'] = $bookingType->commissionForType($agentType) * $ticketCount;
             $data['total_amount'] = ($bookingType->price * $ticketCount) + $data['service_charge'];
         } else {
+            $data['agent_id'] = $data['agent_id'] ?? null;
             $data['service_charge'] = 0;
             $data['total_amount'] = 0;
         }

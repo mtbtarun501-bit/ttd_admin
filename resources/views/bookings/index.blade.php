@@ -15,6 +15,14 @@
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
+    @if (session('warning'))
+        <div class="alert alert-warning">{{ session('warning') }}</div>
+    @endif
+
+    @if (session('info'))
+        <div class="alert alert-info">{{ session('info') }}</div>
+    @endif
+
     <div class="card shadow-sm border-0" style="border-radius:15px;">
         <div class="card-body">
             <div class="table-responsive">
@@ -28,6 +36,7 @@
                             <th>Tickets</th>
                             <th>Total Amount</th>
                             <th>Booked By (Agent)</th>
+                            <th>Agent (Partner)</th>
                             <th>Status</th>
                             <th width="150px">Actions</th>
                         </tr>
@@ -63,11 +72,12 @@
                     </div>
                     @hasanyrole('Super Admin|Operator')
                     <div class="mb-3">
-                        <label for="createdBySelect" class="form-label fw-bold">Booked By (Admin)</label>
-                        <select class="form-select" id="createdBySelect" name="created_by" required>
-                            @foreach($admins as $admin)
-                                <option value="{{ $admin->id }}">
-                                    {{ $admin->name }} ({{ implode(', ', $admin->getRoleNames()->toArray()) }})
+                        <label for="agentSelect" class="form-label fw-bold">Agent (Partner)</label>
+                        <select class="form-select" id="agentSelect" name="agent_id">
+                            <option value="">No Agent</option>
+                            @foreach($agents as $agent)
+                                <option value="{{ $agent->id }}">
+                                    {{ $agent->name }} ({{ $agent->agent_type_label }})
                                 </option>
                             @endforeach
                         </select>
@@ -103,6 +113,7 @@ $(document).ready(function() {
             {data: 'ticket_count', name: 'ticket_count'},
             {data: 'total_amount', name: 'total_amount'},
             {data: 'booked_by_agent', name: 'booked_by_name'},
+            {data: 'agent', name: 'agent.name', orderable: false, searchable: false},
             {data: 'status', name: 'status'},
             {data: 'action', name: 'action', orderable: false, searchable: false},
         ]
@@ -111,7 +122,7 @@ $(document).ready(function() {
     $('#bookingsTable').on('click', '.edit-status-btn', function() {
         var id = $(this).data('id');
         var status = $(this).data('status').toLowerCase();
-        var createdBy = $(this).data('created-by');
+        var agentId = $(this).data('agent-id');
         
         var formAction = "{{ route('bookings.updateStatus', ':id') }}";
         formAction = formAction.replace(':id', id);
@@ -119,8 +130,8 @@ $(document).ready(function() {
         $('#editStatusForm').attr('action', formAction);
         $('#statusSelect').val(status);
         
-        if ($('#createdBySelect').length && createdBy) {
-            $('#createdBySelect').val(createdBy);
+        if ($('#agentSelect').length) {
+            $('#agentSelect').val(agentId !== undefined && agentId !== '' ? String(agentId) : '');
         }
     });
 });

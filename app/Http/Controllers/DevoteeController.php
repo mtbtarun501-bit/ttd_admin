@@ -3,16 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Imports\DevoteeImport;
+use App\Imports\MonthlyDevoteeImport;
 use App\Models\Devotee;
 use App\Models\Booking;
 use App\Models\BookingType;
+use App\Models\Agent;
 use App\Services\DevoteeService;
 use App\Http\Requests\StoreDevoteeRequest;
 use App\Http\Requests\UpdateDevoteeRequest;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
+use Maatwebsite\Excel\Concerns\ToArray;
 use App\Exports\DevoteeExport;
 
 class DevoteeController extends Controller
@@ -27,14 +31,14 @@ class DevoteeController extends Controller
     public function downloadTemplate()
     {
         $headers = [
-            'Name', 'Age', 'Gender', 'Aadhaar', 'Phone', 'Email', 'City', 'State', 'Pincode', 'Gothram', 'Remarks', 'Referred'
+            'Name', 'Age', 'Gender', 'Family', 'Aadhaar', 'Phone', 'Email', 'City', 'State', 'Pincode', 'Gothram', 'Remarks', 'Referred'
         ];
         
         $callback = function() use ($headers) {
             $file = fopen('php://output', 'w');
             fputcsv($file, $headers);
             // Add a sample row
-            fputcsv($file, ['John Doe', '30', 'Male', '123456789012', '9876543210', 'john@example.com', 'Tirupati', 'Andhra Pradesh', '517501', 'Kashyapa', 'VIP Darshan preferred', 'Nikhil']);
+            fputcsv($file, ['John Doe', '30', 'Male', 'Doe Family', '123456789012', '9876543210', 'john@example.com', 'Tirupati', 'Andhra Pradesh', '517501', 'Kashyapa', 'VIP Darshan preferred', 'Nikhil']);
             fclose($file);
         };
 
@@ -54,14 +58,74 @@ class DevoteeController extends Controller
         ]);
 
         try {
-            DB::transaction(function () use ($request) {
-                Excel::import(new DevoteeImport, $request->file('import_file'));
+            $file = $request->file('import_file');
+
+            // The monthly partner workbook is a single-column block layout; the
+            // old template (Name/Age/Gender/Family/.../Referred) is still
+            // supported for backward compatibility. Detect which format the
+            // uploaded file uses before importing.
+            $isTabular = $this->looksLikeTabularTemplate($file);
+            $importer = $isTabular ? new DevoteeImport() : new MonthlyDevoteeImport();
+
+            DB::transaction(function () use ($importer, $file) {
+                Excel::import($importer, $file);
             });
-            return redirect()->back()->with('success', 'Devotees imported successfully.');
+
+            if ($isTabular) {
+                return redirect()->back()->with('success', 'Devotees imported successfully.');
+            }
+
+            $summary = $importer->summary();
+            return redirect()->back()->with('success', sprintf(
+                'Monthly import completed: %d families, %d members imported, %d duplicates skipped.',
+                $summary['families'],
+                $summary['created'],
+                $summary['skipped']
+            ));
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error("Import Error: " . $e->getMessage());
             return redirect()->back()->with('error', 'Error importing file: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Detect whether the uploaded workbook follows the old tabular template
+     * (has a heading row) instead of the single-column monthly block layout.
+     */
+    protected function looksLikeTabularTemplate(UploadedFile $file): bool
+    {
+        $sheets = Excel::toArray(new class implements ToArray
+        {
+            public function array(array $array): array
+            {
+                return $array;
+            }
+        }, $file);
+
+        $rows = $sheets[0] ?? [];
+
+        foreach ($rows as $row) {
+            $cells = is_array($row) ? array_values($row) : [$row];
+            $cells = array_map(fn ($cell) => strtolower(trim((string) ($cell ?? ''))), $cells);
+            $cells = array_filter($cells, fn ($cell) => $cell !== '');
+
+            if (empty($cells)) {
+                continue;
+            }
+
+            foreach ($cells as $cell) {
+                if (in_array($cell, [
+                    'name', 'full name', 'age', 'gender', 'aadhaar',
+                    'aadhaar number', 'family', 'referred', 'phone', 'remarks',
+                ], true)) {
+                    return true;
+                }
+            }
+
+            break; // only inspect the first non-empty row
+        }
+
+        return false;
     }
 
     public function export(Request $request)
@@ -106,11 +170,7 @@ class DevoteeController extends Controller
                 'name' => $devotee->name,
                 'age' => $devotee->age,
                 'adhar number' => $devotee->aadhaar,
-                'email' => $devotee->email,
-                'gothram' => $devotee->gothram,
-                'state' => $devotee->state,
-                'city' => $devotee->city,
-                'pin code' => $devotee->pin_code,
+                'gender' => $devotee->gender,
             ];
         });
 
@@ -127,7 +187,7 @@ class DevoteeController extends Controller
     {
         if ($request->ajax()) {
             // Only show Heads of Family or Standalone Individuals. Hide child members from the main list.
-            $query = Devotee::with(['headFamilyMember'])
+            $query = Devotee::with(['headFamilyMember', 'referredAgent'])
                             ->whereNull('head_devotee_id')
                             ->select('devotees.*');
             
@@ -140,6 +200,9 @@ class DevoteeController extends Controller
                 ->addIndexColumn()
                 ->addColumn('family_status', function($row){
                     if ($row->is_head_of_family) {
+                        if ($row->referred_devotee_id) {
+                            return '<span class="badge bg-primary">Family</span> <span class="badge bg-info">Referred by ' . htmlspecialchars($row->referredAgent->name ?? 'Unknown') . '</span>';
+                        }
                         return '<span class="badge bg-primary">Referred Agent (Head)</span>';
                     } elseif ($row->head_devotee_id) {
                         return '<span class="badge bg-info">Agent: ' . htmlspecialchars($row->headFamilyMember->name ?? 'Unknown') . '</span>';
@@ -149,6 +212,8 @@ class DevoteeController extends Controller
                 ->filterColumn('family_status', function($query, $keyword) {
                     $query->orWhereHas('headFamilyMember', function($q) use ($keyword) {
                         $q->where('name', 'like', "%{$keyword}%");
+                    })->orWhereHas('referredAgent', function($q) use ($keyword) {
+                        $q->where('name', 'like', "%{$keyword}%");
                     });
                 })
                 ->addColumn('action', function($row){
@@ -156,7 +221,10 @@ class DevoteeController extends Controller
                     
                     $btn .= '<button type="button" class="btn btn-sm btn-warning me-1 manage-booking-btn" data-id="'.$row->id.'" data-name="'.htmlspecialchars($row->name).'" title="Manage Booking"><i class="fas fa-ticket-alt"></i></button>';
                     $btn .= '<a href="'.route('devotees.edit', $row->id).'" class="btn btn-sm btn-primary me-1" title="Edit Details"><i class="fas fa-edit"></i></a>';
-                    $btn .= '<button type="button" class="btn btn-sm btn-outline-primary me-1 edit-referred-btn" data-id="'.$row->id.'" data-name="'.htmlspecialchars($row->name).'" data-referred="'.htmlspecialchars($row->is_head_of_family ? $row->name : ($row->headFamilyMember->name ?? '')).'" title="Edit Referred Name"><i class="fas fa-user-tag"></i></button>';
+                    $referredLabel = $row->referred_devotee_id
+                        ? ($row->referredAgent->name ?? '')
+                        : ($row->is_head_of_family ? $row->name : ($row->headFamilyMember->name ?? ''));
+                    $btn .= '<button type="button" class="btn btn-sm btn-outline-primary me-1 edit-referred-btn" data-id="'.$row->id.'" data-name="'.htmlspecialchars($row->name).'" data-referred="'.htmlspecialchars($referredLabel).'" title="Edit Referred Name"><i class="fas fa-user-tag"></i></button>';
                     $btn .= '<a href="'.route('devotees.show', $row->id).'" class="btn btn-sm btn-info text-white me-1" title="View"><i class="fas fa-eye"></i></a>';
                     $btn .= '<form action="'.route('devotees.destroy', $row->id).'" method="POST" style="display:inline-block;">
                                 '.csrf_field().'
@@ -170,10 +238,10 @@ class DevoteeController extends Controller
         }
 
         $bookingTypes = \App\Models\BookingType::all();
-        $users = \App\Models\User::all();
         $agents = Devotee::where('is_head_of_family', true)->get();
+        $partnerAgents = Agent::all();
 
-        return view('devotees.index', compact('bookingTypes', 'users', 'agents'));
+        return view('devotees.index', compact('bookingTypes', 'agents', 'partnerAgents'));
     }
 
     public function create()
@@ -229,14 +297,22 @@ class DevoteeController extends Controller
         $this->authorizeAccess($devotee);
 
         $request->validate([
-            'booked_by_name' => 'required|string|max:255',
+            'booked_by_name' => 'nullable|string|max:255',
             'booking_type_id' => 'required|exists:booking_types,id',
             'ticket_count' => 'required|integer|min:1',
+            'agent_id' => 'nullable|exists:agents,id',
         ]);
 
         $bookingType = BookingType::find($request->booking_type_id);
         $price = $bookingType->price ?? 0;
-        $commission = $bookingType->commission_rate ?? 0;
+
+        $agentType = null;
+        $agent = null;
+        if ($request->filled('agent_id')) {
+            $agent = Agent::find($request->agent_id);
+            $agentType = $agent?->agent_type;
+        }
+        $commission = $bookingType->commissionForType($agentType) ?? 0;
 
         $ticketCount = $request->ticket_count;
         $totalCommission = $commission * $ticketCount;
@@ -248,19 +324,22 @@ class DevoteeController extends Controller
         $booking->booking_type_id = $bookingType->id;
         $booking->booking_date = now();
         $booking->status = 'pending';
+        $booking->agent_id = $request->filled('agent_id') ? $request->agent_id : null;
+        $booking->booked_by_name = $agent?->name ?? $request->booked_by_name;
         $booking->ticket_count = $ticketCount;
         $booking->service_charge = $totalCommission;
         $booking->total_amount = $totalAmount;
-        $booking->booked_by_name = $request->booked_by_name;
         $booking->created_by = auth()->id();
         $booking->save();
 
         // Attach the devotee as attendee automatically for quick booking
         $booking->attendees()->attach($devotee->id);
 
+        $bookedBy = $agent?->name ?? $request->booked_by_name;
+
         return response()->json([
             'success' => true,
-            'message' => 'Booking saved successfully. Amount used by ' . $request->booked_by_name . ': ₹' . number_format($totalAmount, 2)
+            'message' => 'Booking saved successfully. Amount used by ' . $bookedBy . ': ₹' . number_format($totalAmount, 2)
         ]);
     }
 
@@ -276,6 +355,30 @@ class DevoteeController extends Controller
         $referredName = trim((string) $request->input('referred_name', ''));
 
         if ($devotee->is_head_of_family) {
+            $isFamilyGroup = $devotee->referred_devotee_id !== null || $devotee->familyMembers()->exists();
+
+            if ($isFamilyGroup) {
+                // Editing the referred agent that this family is credited to.
+                if ($referredName === '') {
+                    $devotee->update(['referred_devotee_id' => null]);
+                    return response()->json([
+                        'success' => true,
+                        'message' => 'Referral removed from this family.',
+                        'referred' => '',
+                    ]);
+                }
+
+                $agent = $this->resolveReferredAgent($referredName);
+                $devotee->update(['referred_devotee_id' => $agent->id]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Referred agent updated successfully.',
+                    'name' => $devotee->name,
+                    'referred' => $agent->name,
+                ]);
+            }
+
             if ($referredName === '') {
                 return response()->json(['success' => false, 'message' => 'Agent name cannot be empty.'], 422);
             }
@@ -297,29 +400,38 @@ class DevoteeController extends Controller
             ]);
         }
 
-        $agent = Devotee::where('name', 'like', $referredName)->first();
-        if ($agent) {
-            if (!$agent->is_head_of_family) {
-                $agent->is_head_of_family = true;
-                $agent->save();
-            }
-        } else {
-            $agent = Devotee::create([
-                'user_id' => auth()->id() ?? 1,
-                'name' => $referredName,
-                'age' => 30,
-                'gender' => 'Unknown',
-                'is_head_of_family' => true,
-                'remarks' => 'Auto-created from Referred edit',
-            ]);
-        }
-
+        $agent = $this->resolveReferredAgent($referredName);
         $devotee->update(['head_devotee_id' => $agent->id]);
+
         return response()->json([
             'success' => true,
             'message' => 'Referred updated successfully.',
             'referred' => $agent->name,
         ]);
+    }
+
+    /**
+     * Find or create a referred-agent devotee by name.
+     */
+    protected function resolveReferredAgent(string $referredName): Devotee
+    {
+        $agent = Devotee::where('name', 'like', trim($referredName))->first();
+
+        if (!$agent) {
+            $agent = Devotee::create([
+                'user_id' => auth()->id() ?? 1,
+                'name' => trim($referredName),
+                'age' => 30,
+                'gender' => 'Unknown',
+                'is_head_of_family' => true,
+                'remarks' => 'Auto-created from Referred edit',
+            ]);
+        } elseif (!$agent->is_head_of_family) {
+            $agent->is_head_of_family = true;
+            $agent->save();
+        }
+
+        return $agent;
     }
 
     public function update(UpdateDevoteeRequest $request, $id)

@@ -10,7 +10,7 @@ class Booking extends Model
     protected $fillable = [
         'booking_no', 'devotee_id', 'booking_type_id', 
         'booking_date', 'preferred_date', 'status', 
-        'remarks', 'created_by', 'ticket_count', 'service_charge', 'total_amount', 'booked_by_name'
+        'remarks', 'created_by', 'agent_id', 'ticket_count', 'service_charge', 'total_amount', 'booked_by_name'
     ];
 
     // The primary booker (often head of family)
@@ -33,5 +33,10 @@ class Booking extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function agent()
+    {
+        return $this->belongsTo(Agent::class);
     }
 }

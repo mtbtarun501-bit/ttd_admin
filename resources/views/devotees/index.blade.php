@@ -55,20 +55,20 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label class="form-label">Booked By (User)</label>
-                        <select class="form-select" name="booked_by_name" id="booked_by_name" required>
-                            <option value="">Select User...</option>
-                            @foreach($users as $user)
-                                <option value="{{ $user->name }}">{{ $user->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label">Ticket Type</label>
                         <select class="form-select" name="booking_type_id" id="quick_booking_type_id" required>
                             <option value="">Select Ticket Type...</option>
                             @foreach($bookingTypes as $type)
-                                <option value="{{ $type->id }}" data-price="{{ $type->price }}" data-commission="{{ $type->commission_rate }}">{{ $type->name }} (₹{{ $type->price }})</option>
+                                <option value="{{ $type->id }}" data-price="{{ $type->price }}" data-commission="{{ $type->commission_rate }}" data-in-commission="{{ $type->in_partner_commission_rate }}" data-out-commission="{{ $type->out_partner_commission_rate }}">{{ $type->name }} (₹{{ $type->price }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Agent (Partner)</label>
+                        <select class="form-select" name="agent_id" id="quick_agent_id">
+                            <option value="">No Agent</option>
+                            @foreach($partnerAgents as $partner)
+                                <option value="{{ $partner->id }}" data-agent-type="{{ $partner->agent_type }}">{{ $partner->name }} ({{ $partner->agent_type_label }})</option>
                             @endforeach
                         </select>
                     </div>
@@ -142,7 +142,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> Please ensure your file matches the exact format of the template.
+                        <i class="fas fa-info-circle"></i> Supports two formats: the <strong>monthly single-column block sheet</strong> (family member records of Name/Age/Gender/Aadhaar followed by the booking block with head name &amp; phone) and the classic template below.
                     </div>
                     <div class="mb-3">
                         <a href="{{ route('devotees.import_template') }}" class="btn btn-sm btn-outline-success"><i class="fas fa-download"></i> Download Template</a>
@@ -240,11 +240,19 @@ $(document).ready(function() {
     function calculatePrices() {
         var selectedOption = $('#quick_booking_type_id').find('option:selected');
         var count = parseInt($('#quick_ticket_count').val()) || 1;
-        
+        var agentType = $('#quick_agent_id').find('option:selected').data('agent-type');
+
         if (selectedOption.val()) {
             var price = parseFloat(selectedOption.data('price')) || 0;
             var commission = parseFloat(selectedOption.data('commission')) || 0;
-            
+
+            if (agentType === 'in_partner') {
+                commission = parseFloat(selectedOption.data('in-commission'));
+            } else if (agentType === 'out_partner') {
+                commission = parseFloat(selectedOption.data('out-commission'));
+            }
+            commission = commission || 0;
+
             var totalCommission = commission * count;
             var totalAmount = (price * count) + totalCommission;
             
@@ -256,7 +264,7 @@ $(document).ready(function() {
         }
     }
 
-    $('#quick_booking_type_id, #quick_ticket_count').on('change keyup', calculatePrices);
+    $('#quick_booking_type_id, #quick_ticket_count, #quick_agent_id').on('change keyup', calculatePrices);
 
     $('#quickBookingForm').on('submit', function(e) {
         e.preventDefault();

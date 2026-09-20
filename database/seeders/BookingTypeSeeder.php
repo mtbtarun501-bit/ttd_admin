@@ -22,6 +22,11 @@ class BookingTypeSeeder extends Seeder
         ];
 
         foreach ($types as $type) {
+            // Partner rates default to the legacy commission rate on seeding.
+            // Adjust them per partner type from Settings -> Pricing.
+            $type['in_partner_commission_rate'] = $type['commission_rate'];
+            $type['out_partner_commission_rate'] = $type['commission_rate'];
+
             BookingType::updateOrCreate(['name' => $type['name']], $type);
         }
     }

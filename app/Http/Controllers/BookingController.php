@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Services\BookingService;
+use App\Services\PhoneUsageService;
 use App\Models\BookingType;
 use App\Models\Devotee;
+use App\Models\Agent;
 use App\Http\Requests\StoreBookingRequest;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Http\Request;
@@ -13,16 +15,18 @@ use App\Models\Booking;
 class BookingController extends Controller
 {
     protected BookingService $bookingService;
+    protected PhoneUsageService $phoneUsageService;
 
-    public function __construct(BookingService $bookingService)
+    public function __construct(BookingService $bookingService, PhoneUsageService $phoneUsageService)
     {
         $this->bookingService = $bookingService;
+        $this->phoneUsageService = $phoneUsageService;
     }
 
     public function index(Request $request)
     {
         if ($request->ajax()) {
-            $query = Booking::with(['devotee', 'bookingType', 'creator'])->select('bookings.*');
+            $query = Booking::with(['devotee', 'bookingType', 'creator', 'agent'])->select('bookings.*');
             
             if (auth()->check() && auth()->user()->hasRole('User') && !auth()->user()->hasAnyRole(['Super Admin', 'Operator'])) {
                 $query->where('created_by', auth()->id());
@@ -48,6 +52,11 @@ class BookingController extends Controller
                 ->addColumn('booked_by_agent', function($row){
                     return $row->booked_by_name ?? 'N/A';
                 })
+                ->addColumn('agent', function($row){
+                    if (!$row->agent) return '<span class="text-muted">—</span>';
+                    $badge = $row->agent->agent_type === Agent::TYPE_IN_PARTNER ? 'bg-primary' : 'bg-secondary';
+                    return '<span class="badge '.$badge.'">'.$row->agent->name.'</span>';
+                })
                 ->editColumn('status', function($row){
                     if (strtolower($row->status) === 'pending') {
                         return '<span class="badge bg-warning text-dark px-3 py-2" style="border-radius:20px;"><i class="fas fa-clock me-1"></i> Pending / Not Booked</span>';
@@ -63,7 +72,7 @@ class BookingController extends Controller
                 ->addColumn('action', function($row){
                     $btn = '<div class="d-flex align-items-center gap-1">';
                     $btn .= '<a href="'.route('bookings.show', $row->id).'" class="btn btn-sm btn-info text-white"><i class="fas fa-eye"></i></a>';
-                    $btn .= '<button type="button" class="btn btn-sm btn-warning text-dark edit-status-btn" data-id="'.$row->id.'" data-status="'.$row->status.'" data-created-by="'.$row->created_by.'" data-bs-toggle="modal" data-bs-target="#editStatusModal"><i class="fas fa-edit"></i> Edit</button>';
+                    $btn .= '<button type="button" class="btn btn-sm btn-warning text-dark edit-status-btn" data-id="'.$row->id.'" data-status="'.$row->status.'" data-agent-id="'.($row->agent_id ?? '').'" data-bs-toggle="modal" data-bs-target="#editStatusModal"><i class="fas fa-edit"></i> Edit</button>';
                     $btn .= '<form action="'.route('bookings.destroy', $row->id).'" method="POST" class="m-0 p-0" style="display:inline-block;">
                                 '.csrf_field().'
                                 '.method_field('DELETE').'
@@ -72,12 +81,12 @@ class BookingController extends Controller
                     $btn .= '</div>';
                     return $btn;
                 })
-                ->rawColumns(['status', 'action'])
+                ->rawColumns(['status', 'action', 'agent'])
                 ->make(true);
         }
 
-        $admins = \App\Models\User::role(['Super Admin', 'Operator'])->get();
-        return view('bookings.index', compact('admins'));
+        $agents = Agent::orderBy('name')->get();
+        return view('bookings.index', compact('agents'));
     }
 
     public function create()
@@ -91,8 +100,9 @@ class BookingController extends Controller
         
         $devotees = $query->get();
         $bookingTypes = BookingType::all();
+        $agents = Agent::where('status', true)->orderBy('name')->get();
         $admins = \App\Models\User::role(['Super Admin', 'Operator'])->get();
-        return view('bookings.create', compact('devotees', 'bookingTypes', 'admins'));
+        return view('bookings.create', compact('devotees', 'bookingTypes', 'agents', 'admins'));
     }
 
     public function store(StoreBookingRequest $request)
@@ -107,7 +117,7 @@ class BookingController extends Controller
 
     public function show($id)
     {
-        $booking = Booking::with(['devotee', 'bookingType', 'attendees'])->findOrFail($id);
+        $booking = Booking::with(['devotee', 'bookingType', 'attendees', 'agent'])->findOrFail($id);
         $this->authorizeAccess($booking);
         return view('bookings.show', compact('booking'));
     }
@@ -116,6 +126,9 @@ class BookingController extends Controller
     {
         $booking = Booking::findOrFail($id);
         $this->authorizeAccess($booking);
+        if (in_array(strtolower($booking->status), ['confirmed', 'completed'], true)) {
+            $this->phoneUsageService->removeBooking($booking);
+        }
         $this->bookingService->deleteBooking($id);
         return redirect()->route('bookings.index')->with('success', 'Booking cancelled successfully.');
     }
@@ -124,18 +137,37 @@ class BookingController extends Controller
     {
         $request->validate([
             'status' => 'required|in:pending,confirmed,completed,cancelled',
-            'created_by' => 'nullable|exists:users,id'
+            'agent_id' => 'nullable|exists:agents,id'
         ]);
 
         $booking = Booking::findOrFail($id);
         $this->authorizeAccess($booking);
-        
-        $data = ['status' => $request->status];
-        if ($request->has('created_by')) {
-            $data['created_by'] = $request->created_by;
+
+        $previousStatus = strtolower($booking->status);
+        $data = ['status' => $request->status, 'agent_id' => $request->filled('agent_id') ? $request->agent_id : null];
+        if ($request->filled('agent_id')) {
+            $data['booked_by_name'] = Agent::find($request->agent_id)?->name;
+        } elseif ($request->has('agent_id')) {
+            $data['booked_by_name'] = null;
         }
-        
+
         $booking->update($data);
+        $newStatus = strtolower($booking->status);
+
+        if (in_array($newStatus, ['confirmed', 'completed'], true)) {
+            $result = $this->phoneUsageService->syncBooking($booking);
+            if ($result['type'] === 'success') {
+                return redirect()->route('bookings.index')->with('success', 'Booking updated successfully. ' . $result['message']);
+            }
+            if ($result['type'] === 'warning') {
+                return redirect()->route('bookings.index')->with('warning', 'Booking updated successfully, but phone usage was not recorded: ' . $result['message']);
+            }
+            if ($result['type'] === 'skipped') {
+                return redirect()->route('bookings.index')->with('info', 'Booking updated successfully. ' . $result['message']);
+            }
+        } elseif (in_array($previousStatus, ['confirmed', 'completed'], true) && in_array($newStatus, ['pending', 'cancelled'], true)) {
+            $this->phoneUsageService->removeBooking($booking);
+        }
 
         return redirect()->route('bookings.index')->with('success', 'Booking updated successfully.');
     }

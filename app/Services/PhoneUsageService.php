@@ -6,6 +6,7 @@ use App\Models\PhoneUsage;
 use App\Models\PhoneUsageServiceStatus;
 use App\Models\PhoneUsageBookingHistory;
 use App\Models\SevaType;
+use App\Models\Booking;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -107,5 +108,111 @@ class PhoneUsageService
         })->map(function ($status) {
             return $status->sevaType;
         });
+    }
+
+    /**
+     * Auto-record a confirmed booking against the phone usage record of the booking's agent.
+     *
+     * Returns an array describing the outcome so the caller can flash the right message:
+     *  ['type' => 'success'|'warning'|'skipped'|'already', 'message' => string]
+     */
+    public function syncBooking(Booking $booking): array
+    {
+        $agent = $booking->agent;
+        if (!$agent || empty($agent->phone)) {
+            return ['type' => 'warning', 'message' => "No agent phone to link phone usage for booking {$booking->booking_no}."];
+        }
+
+        $phoneUsage = PhoneUsage::where('mobile_number', $agent->phone)->first();
+        if (!$phoneUsage) {
+            $phoneUsage = $this->createPhoneUsage([
+                'member_name' => $agent->name,
+                'mobile_number' => $agent->phone,
+                'status' => 'Active',
+                'remarks' => 'Auto-created from booking ' . $booking->booking_no,
+            ], []);
+        }
+
+        $sevaTypeId = $booking->bookingType?->seva_type_id;
+        if (!$sevaTypeId) {
+            return ['type' => 'skipped', 'message' => "Booking type '{$booking->bookingType?->name}' is not mapped to a seva, so it won't be tracked in Phone Usage."];
+        }
+
+        return DB::transaction(function () use ($booking, $phoneUsage, $sevaTypeId, $agent) {
+            $already = PhoneUsageBookingHistory::where('booking_id', $booking->id)->exists();
+            if ($already) {
+                return ['type' => 'already', 'message' => 'Booking already recorded in Phone Usage.'];
+            }
+
+            $bookingDate = $booking->preferred_date ? Carbon::parse($booking->preferred_date) : Carbon::today();
+
+            PhoneUsageBookingHistory::create([
+                'phone_usage_id' => $phoneUsage->id,
+                'seva_type_id' => $sevaTypeId,
+                'booking_date' => $bookingDate,
+                'remarks' => sprintf(
+                    'Booking %s · Agent: %s · %s',
+                    $booking->booking_no,
+                    $agent->name,
+                    $booking->bookingType?->name
+                ),
+                'created_by' => auth()->id(),
+                'booking_id' => $booking->id,
+            ]);
+
+            $this->recomputeServiceStatus($phoneUsage, $sevaTypeId);
+
+            return ['type' => 'success', 'message' => "Recorded in Phone Usage under {$phoneUsage->member_name} ({$phoneUsage->mobile_number})."];
+        });
+    }
+
+    /**
+     * Remove any phone usage history rows linked to a booking and recompute the affected seva status.
+     * Used when a confirmed/completed booking is cancelled or deleted.
+     */
+    public function removeBooking(Booking $booking): void
+    {
+        $histories = PhoneUsageBookingHistory::where('booking_id', $booking->id)->get();
+        if ($histories->isEmpty()) {
+            return;
+        }
+
+        foreach ($histories as $history) {
+            $phoneUsageId = $history->phone_usage_id;
+            $sevaTypeId = $history->seva_type_id;
+            $history->delete();
+            $phoneUsage = PhoneUsage::find($phoneUsageId);
+            if ($phoneUsage) {
+                DB::transaction(function () use ($phoneUsage, $sevaTypeId) {
+                    $this->recomputeServiceStatus($phoneUsage, $sevaTypeId);
+                });
+            }
+        }
+    }
+
+    /**
+     * Recompute last_booked_date / next_eligible_date for a phone+seva from its history rows.
+     */
+    protected function recomputeServiceStatus(PhoneUsage $phoneUsage, int $sevaTypeId): void
+    {
+        $status = PhoneUsageServiceStatus::where('phone_usage_id', $phoneUsage->id)
+            ->where('seva_type_id', $sevaTypeId)
+            ->first();
+
+        if (!$status) {
+            return;
+        }
+
+        $lastBookedDate = PhoneUsageBookingHistory::where('phone_usage_id', $phoneUsage->id)
+            ->where('seva_type_id', $sevaTypeId)
+            ->max('booking_date');
+
+        $lastBookedDate = $lastBookedDate ? Carbon::parse($lastBookedDate) : null;
+        $nextEligibleDate = $this->calculateNextEligibleDate($lastBookedDate, $status->sevaType->cooldown_months);
+
+        $status->update([
+            'last_booked_date' => $lastBookedDate,
+            'next_eligible_date' => $nextEligibleDate,
+        ]);
     }
 }

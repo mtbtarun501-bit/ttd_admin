@@ -2,166 +2,189 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Agent;
+use App\Services\AgentLedgerService;
 use App\Services\RevenueService;
 use App\Http\Requests\StoreRevenueRequest;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Http\Request;
 use App\Models\Revenue;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\RevenueExport;
 
 class RevenueController extends Controller
 {
     protected RevenueService $revenueService;
+    protected AgentLedgerService $ledger;
 
-    public function __construct(RevenueService $revenueService)
+    public function __construct(RevenueService $revenueService, AgentLedgerService $ledger)
     {
         $this->revenueService = $revenueService;
+        $this->ledger = $ledger;
     }
 
-    public function export()
-    {
-        return Excel::download(new RevenueExport, 'revenues_list_' . date('Y_m_d') . '.csv');
-    }
-
+    /**
+     * Revenue dashboard computed from confirmed/completed bookings (earned commission).
+     */
     public function index(Request $request)
     {
+        $year = $this->resolveYear($request->query('year'));
+        $partner = $this->resolvePartner($request->query('partner'));
+
         if ($request->ajax()) {
-            $query = Revenue::query()
-                ->selectRaw('agent_name, SUM(amount) as total_amount, SUM(CASE WHEN MONTH(revenue_date) = MONTH(CURRENT_DATE()) AND YEAR(revenue_date) = YEAR(CURRENT_DATE()) THEN amount ELSE 0 END) as monthly_amount, MAX(revenue_date) as latest_date')
-                ->groupBy('agent_name');
-            
-            if (auth()->check() && auth()->user()->hasRole('User') && !auth()->user()->hasAnyRole(['Super Admin', 'Operator'])) {
-                $query->where('created_by', auth()->id());
-            }
+            $query = $this->ledger->aggregatePerYear($year, $partner);
+            $maxEarned = (float) max((clone $query)->get()->pluck('earned')->map('floatval')->all(), 0.0);
 
             return DataTables::of($query)
                 ->addIndexColumn()
-                ->addColumn('agent_display', function($row){
-                    return $row->agent_name ?: 'Unknown';
+                ->editColumn('name', function ($row) {
+                    $badge = $row->agent_type === Agent::TYPE_IN_PARTNER ? 'bg-primary' : 'bg-secondary';
+                    return $row->name . ' <span class="badge ' . $badge . '">' . $row->agent_type_label . '</span>'
+                        . ($row->phone ? ' <small class="text-muted d-block">' . e($row->phone) . '</small>' : '');
                 })
-                ->addColumn('monthly_amount_formatted', function($row){
-                    return '₹' . number_format($row->monthly_amount, 2);
+                ->editColumn('bookings_count', function ($row) {
+                    return $row->bookings_count ?: 0;
                 })
-                ->addColumn('amount_formatted', function($row){
-                    return '₹' . number_format($row->total_amount, 2);
+                ->editColumn('tickets', function ($row) {
+                    return $row->tickets ?: 0;
                 })
-                ->addColumn('action', function($row){
-                    $agentParam = urlencode($row->agent_name ?: 'Unknown');
-                    $agentRaw = $row->agent_name ?: 'Unknown';
-                    
-                    $btn = '<div class="d-flex gap-2 justify-content-end">';
-                    $btn .= '<a href="'.route('revenues.show', $agentParam).'" class="btn btn-sm text-white d-flex align-items-center shadow-sm" style="background:var(--temple-gold); border-radius: 6px;"><i class="fas fa-eye me-1"></i> View</a>';
-                    $btn .= '<button type="button" class="btn btn-sm btn-danger delete-agent-btn d-flex align-items-center shadow-sm" data-agent="'.htmlspecialchars($agentRaw, ENT_QUOTES, 'UTF-8').'" style="background:var(--temple-maroon); border:none; border-radius: 6px;"><i class="fas fa-trash-alt me-1"></i> Delete</button>';
-                    $btn .= '</div>';
-                    
-                    return $btn;
+                ->editColumn('earned', function ($row) use ($maxEarned) {
+                    $earned = (float) ($row->earned ?? 0);
+                    $pct = $maxEarned > 0 ? round($earned / $maxEarned * 100, 1) : 0;
+                    $barColor = $maxEarned > 0 && $pct >= 50
+                        ? 'linear-gradient(90deg, #198754, #2fa06b)'
+                        : ($maxEarned > 0 && $pct >= 25 ? 'linear-gradient(90deg, #20c997, #7adcbf)' : 'linear-gradient(90deg, #e5e7eb, #cbd5e1)');
+                    $html = '<div class="fw-bold text-success">₹' . number_format($earned, 0) . '</div>';
+                    $html .= '<div class="earn-bar"><div style="width:' . $pct . '%; background:' . $barColor . ';"></div></div>';
+                    return $html;
                 })
-                ->rawColumns(['action'])
+                ->editColumn('spent', function ($row) {
+                    return '₹' . number_format($row->spent ?? 0, 0);
+                })
+                ->editColumn('total', function ($row) {
+                    return '₹' . number_format($row->total ?? 0, 0);
+                })
+                ->addColumn('action', function ($row) {
+                    return '<a href="' . route('revenues.show', $row->id) . '" class="btn btn-sm text-white" style="background:var(--temple-gold);"><i class="fas fa-chart-pie"></i> View</a>'
+                        . ' <a href="' . route('agent-accounts.show', $row->id) . '?year=' . request('year', date('Y')) . '" class="btn btn-sm btn-outline-secondary"><i class="fas fa-file-invoice-dollar"></i> Ledger</a>';
+                })
+                ->rawColumns(['name', 'earned', 'action'])
                 ->make(true);
         }
 
-        $baseQuery = Revenue::query();
-        if (auth()->check() && auth()->user()->hasRole('User') && !auth()->user()->hasAnyRole(['Super Admin', 'Operator'])) {
-            $baseQuery->where('created_by', auth()->id());
+        $yearTotals = $this->ledger->yearTotals($year, $partner);
+        $prevYearEarned = (float) $this->ledger->yearTotals($year - 1, $partner)->earned;
+        $yearDelta = $prevYearEarned > 0 ? round(((float) $yearTotals->earned - $prevYearEarned) / $prevYearEarned * 100, 1) : null;
+
+        $allTimeEarned = (float) $this->ledger->totals(null, $partner)->earned;
+
+        $thisMonthEarned = $year === (int) date('Y') ? (float) $this->ledger->overallMonthly($year, $partner)[(int) date('n')]['data']->earned : 0.0;
+        $currentMonthNum = (int) date('n');
+        $prevMonthEntry = $currentMonthNum === 1
+            ? $this->ledger->overallMonthly($year - 1, $partner)[12]
+            : $this->ledger->overallMonthly($year, $partner)[$currentMonthNum - 1];
+        $lastMonthEarned = (float) $prevMonthEntry['data']->earned;
+        $monthDelta = $lastMonthEarned > 0 ? round(($thisMonthEarned - $lastMonthEarned) / $lastMonthEarned * 100, 1) : null;
+
+        $matrix = $this->ledger->yearlyMatrix($year, $partner);
+        $overallMonths = $this->ledger->overallMonthly($year, $partner);
+        $trend = $this->ledger->annualTrend($year, $partner);
+        $top = $this->ledger->topAgents($year, 5, $partner);
+        $split = $this->ledger->partnerSplit($year, $partner);
+
+        $activeAgents = Agent::query()->where('status', true);
+        if ($partner) {
+            $activeAgents->where('agent_type', $partner);
+        }
+        $activeAgents = $activeAgents->count();
+
+        $monthLabels = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $monthLabels[$i] = now()->setMonth($i)->format('M');
         }
 
-        $totalRevenue = (clone $baseQuery)->sum('amount');
-        $monthlyRevenue = (clone $baseQuery)->whereMonth('revenue_date', now()->month)
-                                            ->whereYear('revenue_date', now()->year)
-                                            ->sum('amount');
-        
-        $totalAgents = (clone $baseQuery)->whereNotNull('agent_name')->where('agent_name', '!=', '')->distinct('agent_name')->count('agent_name');
+        $agentCount = Agent::query()->when($partner, fn ($q) => $q->where('agent_type', $partner))->count();
 
-        // Monthly Trend (Last 6 months)
-        $monthlyTrend = (clone $baseQuery)
-            ->selectRaw('DATE_FORMAT(revenue_date, "%Y-%m") as month, SUM(amount) as total')
-            ->where('revenue_date', '>=', now()->subMonths(5)->startOfMonth())
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get()
-            ->keyBy('month');
-            
-        $trendLabels = [];
-        $trendData = [];
-        for ($i = 5; $i >= 0; $i--) {
-            $monthKey = now()->subMonths($i)->format('Y-m');
-            $trendLabels[] = now()->subMonths($i)->format('M Y');
-            $trendData[] = $monthlyTrend->has($monthKey) ? $monthlyTrend[$monthKey]->total : 0;
-        }
-
-        // Top 5 Agents
-        $topAgents = (clone $baseQuery)
-            ->selectRaw('agent_name, SUM(amount) as total')
-            ->whereNotNull('agent_name')
-            ->where('agent_name', '!=', '')
-            ->groupBy('agent_name')
-            ->orderByDesc('total')
-            ->limit(5)
-            ->get();
-            
-        $agentLabels = $topAgents->pluck('agent_name')->toArray();
-        $agentData = $topAgents->pluck('total')->toArray();
-
-        return view('revenues.index', compact('totalRevenue', 'monthlyRevenue', 'totalAgents', 'trendLabels', 'trendData', 'agentLabels', 'agentData'));
+        return view('revenues.index', compact(
+            'year', 'partner', 'yearTotals', 'prevYearEarned', 'yearDelta',
+            'allTimeEarned', 'thisMonthEarned', 'lastMonthEarned', 'monthDelta',
+            'matrix', 'overallMonths', 'trend', 'top', 'split',
+            'activeAgents', 'monthLabels', 'agentCount'
+        ));
     }
 
-    public function show(Request $request, $agent_name)
+    /**
+     * Per-agent revenue drill-down for a year.
+     */
+    public function show(Request $request, $id)
     {
-        if ($agent_name === 'Unknown') {
-            $agent_name = null; // or handle empty string
-        }
+        $agent = Agent::findOrFail($id);
+        $year = $this->resolveYear($request->query('year'));
 
-        if ($request->ajax()) {
-            $query = Revenue::with('importBooking.members');
-            
-            if (is_null($agent_name) || $agent_name === 'Unknown') {
-                $query->where(function($q) {
-                    $q->whereNull('agent_name')->orWhere('agent_name', '')->orWhere('agent_name', 'Unknown');
-                });
-            } else {
-                $query->where('agent_name', $agent_name);
-            }
-            
-            if (auth()->check() && auth()->user()->hasRole('User') && !auth()->user()->hasAnyRole(['Super Admin', 'Operator'])) {
-                $query->where('created_by', auth()->id());
-            }
+        $months = $this->ledger->perMonthMatrix($agent->id, $year);
 
-            return DataTables::of($query)
-                ->addIndexColumn()
-                ->addColumn('members', function($row){
-                    if ($row->importBooking && $row->importBooking->members->count() > 0) {
-                        $count = $row->importBooking->members->count();
-                        $html = '<div class="text-start">';
-                        $html .= '<button type="button" class="btn btn-link btn-sm text-decoration-none p-0" data-bs-toggle="collapse" data-bs-target="#members-show-'.$row->id.'">';
-                        $html .= '<span class="badge bg-secondary rounded-pill me-1">'.$count.'</span> View Members <i class="fas fa-caret-down"></i>';
-                        $html .= '</button>';
-                        $html .= '<div class="collapse mt-2" id="members-show-'.$row->id.'">';
-                        $html .= '<ul class="list-group list-group-flush" style="font-size:0.85rem;">';
-                        foreach($row->importBooking->members as $member) {
-                            $html .= '<li class="list-group-item py-1 px-2 border-0 bg-light rounded mb-1"><i class="fas fa-user-circle text-muted me-2"></i> '.htmlspecialchars($member->member_name).'</li>';
-                        }
-                        $html .= '</ul></div></div>';
-                        return $html;
-                    }
-                    return '<span class="text-muted small">N/A</span>';
-                })
-                ->addColumn('amount_formatted', function($row){
-                    return '₹' . number_format($row->amount, 2);
-                })
-                ->addColumn('action', function($row){
-                    $btn = '<div class="d-flex justify-content-end">';
-                    $btn .= '<button type="button" class="btn btn-sm btn-danger delete-revenue-btn d-flex align-items-center shadow-sm" data-id="'.$row->id.'" style="background:var(--temple-maroon); border:none; border-radius: 6px;"><i class="fas fa-trash-alt me-1"></i> Delete</button>';
-                    $btn .= '</div>';
-                    return $btn;
-                })
-                ->rawColumns(['action', 'members'])
-                ->make(true);
-        }
+        $yearTotals = (object) [
+            'bookings_count' => array_sum(array_column($months, 'bookings_count')),
+            'tickets' => array_sum(array_column($months, 'tickets')),
+            'spent' => array_sum(array_column($months, 'spent')),
+            'earned' => array_sum(array_column($months, 'earned')),
+            'total' => array_sum(array_column($months, 'total')),
+        ];
 
-        return view('revenues.show', compact('agent_name'));
+        $transactions = $this->ledger->perYearBookings($agent->id, $year);
+
+        return view('revenues.show', compact('agent', 'year', 'months', 'yearTotals', 'transactions'));
     }
 
+    /**
+     * CSV export of the yearly matrix (agents x months + totals).
+     */
+    public function export(Request $request)
+    {
+        $year = $this->resolveYear($request->query('year'));
+        $partner = $this->resolvePartner($request->query('partner'));
+
+        $matrix = $this->ledger->yearlyMatrix($year, $partner);
+        $overallMonths = $this->ledger->overallMonthly($year, $partner);
+
+        $monthLabels = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $monthLabels[$i] = now()->setMonth($i)->format('M');
+        }
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="revenue_' . $year . '.csv"',
+        ];
+
+        $callback = function () use ($matrix, $overallMonths, $year, $monthLabels) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Revenue (earned commission) - ' . $year]);
+            fputcsv($out, array_merge(['Agent', 'Type', 'Phone'], array_values($monthLabels), ['Total']));
+
+            foreach ($matrix as $entry) {
+                $row = [$entry['agent']->name, $entry['agent']->agent_type_label, $entry['agent']->phone];
+                foreach ($entry['months'] as $cell) {
+                    $row[] = number_format($cell->earned, 2);
+                }
+                $row[] = number_format($entry['total']->earned, 2);
+                fputcsv($out, $row);
+            }
+
+            $totRow = ['TOTAL', '', ''];
+            foreach ($overallMonths as $entry) {
+                $totRow[] = number_format($entry['data']->earned, 2);
+            }
+            $totRow[] = number_format(array_sum(array_column(array_map(fn ($e) => $e['data'], $overallMonths), 'earned')), 2);
+            fputcsv($out, $totRow);
+
+            fclose($out);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Manual revenue records are archived: creation remains available via the old route if ever needed.
+     */
     public function create()
     {
         return view('revenues.create');
@@ -183,11 +206,11 @@ class RevenueController extends Controller
         }
 
         $this->revenueService->deleteRevenue($id);
-        
+
         if ($request->ajax()) {
             return response()->json(['success' => true, 'message' => 'Revenue removed successfully.']);
         }
-        
+
         return redirect()->route('revenues.index')->with('success', 'Revenue removed successfully.');
     }
 
@@ -199,7 +222,7 @@ class RevenueController extends Controller
 
         $query = Revenue::query();
         if (is_null($agent_name)) {
-            $query->where(function($q) {
+            $query->where(function ($q) {
                 $q->whereNull('agent_name')->orWhere('agent_name', '')->orWhere('agent_name', 'Unknown');
             });
         } else {
@@ -215,7 +238,24 @@ class RevenueController extends Controller
         if ($request->ajax()) {
             return response()->json(['success' => true, 'message' => 'All revenues for this agent removed successfully.']);
         }
-        
+
         return redirect()->route('revenues.index')->with('success', 'All revenues for this agent removed successfully.');
+    }
+
+    protected function resolveYear($year): int
+    {
+        $year = (int) $year;
+        if ($year < 2020 || $year > (int) date('Y') + 1) {
+            return (int) date('Y');
+        }
+        return $year;
+    }
+
+    protected function resolvePartner($partner): ?string
+    {
+        if (in_array($partner, [Agent::TYPE_IN_PARTNER, Agent::TYPE_OUT_PARTNER], true)) {
+            return $partner;
+        }
+        return null;
     }
 }

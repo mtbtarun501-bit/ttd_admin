@@ -20,6 +20,7 @@ class StoreBookingRequest extends FormRequest
             'preferred_date' => 'nullable|date|after_or_equal:booking_date',
             'remarks' => 'nullable|string',
             'created_by' => 'nullable|exists:users,id',
+            'agent_id' => 'nullable|exists:agents,id',
             'attendee_ids' => 'nullable|array',
             'attendee_ids.*' => 'exists:devotees,id'
         ];

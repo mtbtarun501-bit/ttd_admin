@@ -64,6 +64,20 @@
                         <input type="date" name="preferred_date" class="form-control" value="{{ old('preferred_date') }}" min="{{ date('Y-m-d') }}">
                     </div>
 
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Agent (Partner)</label>
+                        <select name="agent_id" class="form-select @error('agent_id') is-invalid @enderror">
+                            <option value="">-- No Agent --</option>
+                            @foreach($agents as $agent)
+                                <option value="{{ $agent->id }}" data-agent-type="{{ $agent->agent_type }}" {{ old('agent_id') == $agent->id ? 'selected' : '' }}>
+                                    {{ $agent->name }} ({{ $agent->agent_type_label }})
+                                </option>
+                            @endforeach
+                        </select>
+                        <small class="text-muted">Commission will be calculated from the selected partner's rate.</small>
+                        @error('agent_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
                     <div class="col-12 mt-3" id="attendees-container" style="display:none;">
                         <label class="form-label fw-bold text-primary border-bottom pb-2 w-100">Select Attendees (Family Members)</label>
                         <div id="attendees-list" class="row mt-2">

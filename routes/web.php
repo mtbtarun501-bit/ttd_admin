@@ -21,6 +21,7 @@ Route::middleware(['auth', 'role:Super Admin|Operator|User'])->group(function ()
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     
     Route::get('agent-accounts', [App\Http\Controllers\AgentAccountController::class, 'index'])->name('agent-accounts.index');
+    Route::get('agent-accounts/export', [App\Http\Controllers\AgentAccountController::class, 'export'])->name('agent-accounts.export');
     Route::get('agent-accounts/{id}', [App\Http\Controllers\AgentAccountController::class, 'show'])->name('agent-accounts.show');
 
     // Settings Module
@@ -48,7 +49,17 @@ Route::middleware(['auth', 'role:Super Admin|Operator'])->group(function () {
     
     Route::patch('bookings/{booking}/status', [App\Http\Controllers\BookingController::class, 'updateStatus'])->name('bookings.updateStatus');
     Route::resource('bookings', App\Http\Controllers\BookingController::class);
-    Route::resource('investments', App\Http\Controllers\InvestmentController::class);
+
+    // Agents Module (Partners - In/Out)
+    Route::resource('agents', App\Http\Controllers\AgentController::class)->except(['show']);
+
+    // Investment Portfolio (live crypto + stock dashboard)
+    Route::get('investments', [App\Http\Controllers\InvestmentController::class, 'index'])->name('investments.index');
+    Route::post('investments', [App\Http\Controllers\InvestmentController::class, 'store'])->name('investments.store');
+    Route::get('investments/{investment}/edit', [App\Http\Controllers\InvestmentController::class, 'edit'])->name('investments.edit');
+    Route::put('investments/{investment}', [App\Http\Controllers\InvestmentController::class, 'update'])->name('investments.update');
+    Route::delete('investments/{investment}', [App\Http\Controllers\InvestmentController::class, 'destroy'])->name('investments.destroy');
+    Route::get('api/investments/live', [App\Http\Controllers\InvestmentController::class, 'live'])->name('investments.live');
     
     Route::get('revenues/export', [App\Http\Controllers\RevenueController::class, 'export'])->name('revenues.export');
     

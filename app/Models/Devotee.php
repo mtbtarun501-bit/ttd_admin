@@ -14,6 +14,7 @@ class Devotee extends Model
         'user_id',
         'is_head_of_family',
         'head_devotee_id',
+        'referred_devotee_id',
         'preferred_booking_type_id',
         'name',
         'age',
@@ -50,6 +51,22 @@ class Devotee extends Model
     public function familyMembers()
     {
         return $this->hasMany(Devotee::class, 'head_devotee_id');
+    }
+
+    /**
+     * The referred agent who gets credit for this devotee / family.
+     */
+    public function referredAgent()
+    {
+        return $this->belongsTo(Devotee::class, 'referred_devotee_id');
+    }
+
+    /**
+     * The families this agent has referred.
+     */
+    public function referredFamilies()
+    {
+        return $this->hasMany(Devotee::class, 'referred_devotee_id');
     }
 
     public function preferredBookingType()

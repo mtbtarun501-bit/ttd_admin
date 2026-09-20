@@ -115,6 +115,12 @@
                 </a>
             </li>
             
+            <li>
+                <a href="{{ route('agents.index') }}" class="{{ request()->routeIs('agents.*') ? 'active' : '' }}" data-bs-toggle="tooltip" data-bs-placement="right" data-bs-title="Agents">
+                    <i class="fas fa-handshake"></i> <span class="nav-text">Agents</span>
+                </a>
+            </li>
+            
             <hr style="border-color: rgba(255,255,255,0.1); margin: 15px 20px;">
             
             <li>

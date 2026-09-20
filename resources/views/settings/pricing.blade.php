@@ -27,7 +27,9 @@
                             <tr>
                                 <th>Booking Type</th>
                                 <th>Price (Rs)</th>
-                                <th>Commission Rate/Service Charge (Rs)</th>
+                                <th>In Partner Commission (Rs)</th>
+                                <th>Out Partner Commission (Rs)</th>
+                                <th>Phone Usage Seva</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -46,8 +48,22 @@
                                 <td>
                                     <div class="input-group">
                                         <span class="input-group-text">₹</span>
-                                        <input type="number" step="0.01" class="form-control" name="prices[{{ $index }}][commission_rate]" value="{{ $type->commission_rate }}" required min="0">
+                                        <input type="number" step="0.01" class="form-control" name="prices[{{ $index }}][in_partner_commission_rate]" value="{{ $type->in_partner_commission_rate }}" required min="0">
                                     </div>
+                                </td>
+                                <td>
+                                    <div class="input-group">
+                                        <span class="input-group-text">₹</span>
+                                        <input type="number" step="0.01" class="form-control" name="prices[{{ $index }}][out_partner_commission_rate]" value="{{ $type->out_partner_commission_rate }}" required min="0">
+                                    </div>
+                                </td>
+                                <td>
+                                    <select class="form-select" name="prices[{{ $index }}][seva_type_id]">
+                                        <option value="">— Not tracked —</option>
+                                        @foreach($sevas as $seva)
+                                        <option value="{{ $seva->id }}" {{ $type->seva_type_id == $seva->id ? 'selected' : '' }}>{{ $seva->name }}</option>
+                                        @endforeach
+                                    </select>
                                 </td>
                             </tr>
                             @endforeach

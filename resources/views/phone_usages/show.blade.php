@@ -120,7 +120,7 @@
                                 <tr>
                                     <th>Booking Date</th>
                                     <th>Service</th>
-                                    <th>Remarks</th>
+                                    <th>Booking / Remarks</th>
                                     <th>Added By</th>
                                     <th>Recorded On</th>
                                 </tr>
@@ -130,7 +130,14 @@
                                 <tr>
                                     <td>{{ $history->booking_date->format('d M Y') }}</td>
                                     <td><span class="badge bg-info">{{ $history->sevaType->name }}</span></td>
-                                    <td>{{ $history->remarks ?: '-' }}</td>
+                                    <td>
+                                        @if($history->booking)
+                                            <strong>{{ $history->booking->booking_no }}</strong><br>
+                                            <small class="text-muted">{{ $history->booking->agent ? 'Agent: ' . $history->booking->agent->name : '' }}</small>
+                                        @else
+                                            {{ $history->remarks ?: '-' }}
+                                        @endif
+                                    </td>
                                     <td>{{ $history->creator ? $history->creator->name : 'System' }}</td>
                                     <td>{{ $history->created_at->format('d M Y H:i') }}</td>
                                 </tr>

@@ -63,6 +63,18 @@
                                 @endif
                             </div>
                         </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="text-muted fw-bold mb-1">Referred</label>
+                            <div>
+                                @if($devotee->referredAgent)
+                                    {{ $devotee->referredAgent->name }}
+                                @elseif($devotee->headFamilyMember)
+                                    {{ $devotee->headFamilyMember->name }}
+                                @else
+                                    N/A
+                                @endif
+                            </div>
+                        </div>
 
                         <div class="col-md-12 mb-3">
                             <label class="text-muted fw-bold mb-1">Address</label>
@@ -101,6 +113,7 @@
                                             <th class="ps-4">Name</th>
                                             <th>Relation</th>
                                             <th>Age/Gender</th>
+                                            <th>Aadhaar</th>
                                             <th>Pref. Ticket</th>
                                             <th class="pe-4 text-end">Action</th>
                                         </tr>
@@ -111,6 +124,7 @@
                                                 <td class="ps-4 fw-bold">{{ $member->name }}</td>
                                                 <td><span class="badge bg-info text-dark">Family Member</span></td>
                                                 <td>{{ $member->age }} / {{ $member->gender }}</td>
+                                                <td>{{ $member->aadhaar ?? '-' }}</td>
                                                 <td>
                                                     @if($member->preferredBookingType)
                                                         <span class="badge bg-secondary">{{ $member->preferredBookingType->name }}</span>

@@ -32,6 +32,18 @@
                             <td><span class="badge bg-primary">{{ $booking->booked_by_name ?? 'N/A' }}</span></td>
                         </tr>
                         <tr>
+                            <td class="text-muted fw-bold">Agent (Partner):</td>
+                            <td>
+                                @if($booking->agent)
+                                    <span class="badge {{ $booking->agent->agent_type === \App\Models\Agent::TYPE_IN_PARTNER ? 'bg-primary' : 'bg-secondary' }}">
+                                        {{ $booking->agent->name }} ({{ $booking->agent->agent_type_label }})
+                                    </span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                        </tr>
+                        <tr>
                             <td class="text-muted fw-bold">Booking Date:</td>
                             <td>{{ \Carbon\Carbon::parse($booking->booking_date)->format('d M Y') }}</td>
                         </tr>

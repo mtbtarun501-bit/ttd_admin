@@ -92,7 +92,7 @@ class PhoneUsageController extends Controller
 
     public function show(PhoneUsage $phoneUsage)
     {
-        $phoneUsage->load(['serviceStatuses.sevaType', 'bookingHistories.sevaType', 'bookingHistories.creator']);
+        $phoneUsage->load(['serviceStatuses.sevaType', 'bookingHistories.sevaType', 'bookingHistories.creator', 'bookingHistories.booking.agent']);
         
         // Sort booking histories newest first
         $phoneUsage->setRelation('bookingHistories', $phoneUsage->bookingHistories->sortByDesc('booking_date'));
