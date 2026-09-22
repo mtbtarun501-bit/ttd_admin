@@ -77,11 +77,11 @@
                             </thead>
                             <tbody>
                                 @foreach($phoneUsage->serviceStatuses->sortBy('sevaType.display_order') as $status)
-                                <tr>
+                                <tr data-seva-id="{{ $status->seva_type_id }}">
                                     <td><strong>{{ $status->sevaType->name }}</strong> <br><small class="text-muted">{{ $status->sevaType->cooldown_months }}m cooldown</small></td>
-                                    <td>{{ $status->last_booked_date ? $status->last_booked_date->format('d M Y') : 'Never' }}</td>
-                                    <td>{{ $status->next_eligible_date ? $status->next_eligible_date->format('d M Y') : '-' }}</td>
-                                    <td>
+                                    <td class="cell-last-booked">{{ $status->last_booked_date ? $status->last_booked_date->format('d M Y') : 'Never' }}</td>
+                                    <td class="cell-next-eligible">{{ $status->next_eligible_date ? $status->next_eligible_date->format('d M Y') : '-' }}</td>
+                                    <td class="cell-status">
                                         @if(!$status->next_eligible_date || \Carbon\Carbon::today()->greaterThanOrEqualTo($status->next_eligible_date))
                                             <span class="badge bg-success">Eligible</span>
                                         @else
@@ -113,9 +113,8 @@
                     <h5 class="mb-0">Booking History</h5>
                 </div>
                 <div class="card-body">
-                    @if($phoneUsage->bookingHistories->count() > 0)
                     <div class="table-responsive">
-                        <table class="table table-bordered">
+                        <table id="bookingHistoryTable" class="table table-bordered" @if($phoneUsage->bookingHistories->count() === 0) style="display: none;" @endif>
                             <thead class="table-light">
                                 <tr>
                                     <th>Booking Date</th>
@@ -125,7 +124,7 @@
                                     <th>Recorded On</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody id="bookingHistoryBody">
                                 @foreach($phoneUsage->bookingHistories as $history)
                                 <tr>
                                     <td>{{ $history->booking_date->format('d M Y') }}</td>
@@ -145,9 +144,9 @@
                             </tbody>
                         </table>
                     </div>
-                    @else
-                    <p class="text-muted mb-0">No booking history recorded yet.</p>
-                    @endif
+                    <p id="noHistoryMsg" class="text-muted mb-0" @if($phoneUsage->bookingHistories->count() > 0) style="display: none;" @endif>
+                        No booking history recorded yet.
+                    </p>
                 </div>
             </div>
         </div>
@@ -162,7 +161,7 @@
                 <h5 class="modal-title" id="addBookingModalLabel">Record New Booking</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form action="{{ route('phone-usages.bookings.store', $phoneUsage->id) }}" method="POST">
+            <form id="addBookingForm" action="{{ route('phone-usages.bookings.store', $phoneUsage->id) }}" method="POST">
                 @csrf
                 <div class="modal-body">
                     <div class="mb-3">
@@ -193,3 +192,153 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+/**
+ * Instant Async Booking Form (Direct AJAX + Transactional Locking)
+ */
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('addBookingForm');
+    if (!form) return;
+
+    function escapeHtml(str) {
+        if (!str) return '-';
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var btn = form.querySelector('button[type=submit]');
+        var originalHTML = btn.innerHTML;
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (response) {
+            var contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                return response.json().then(function (data) {
+                    return { ok: response.ok, status: response.status, data: data };
+                });
+            } else {
+                return { ok: false, status: response.status, data: { message: 'Server responded with status ' + response.status } };
+            }
+        })
+        .then(function (result) {
+            if (result.ok && result.data && result.data.success) {
+                // 1. Close Modal
+                var modalEl = document.getElementById('addBookingModal');
+                var modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (!modalInstance) {
+                    modalInstance = new bootstrap.Modal(modalEl);
+                }
+                modalInstance.hide();
+
+                // 2. Update eligibility matrix row
+                var upd = result.data.updated_status;
+                var row = document.querySelector('tr[data-seva-id="' + upd.seva_type_id + '"]');
+                if (row) {
+                    var cellLast = row.querySelector('.cell-last-booked');
+                    var cellNext = row.querySelector('.cell-next-eligible');
+                    var badge = row.querySelector('.cell-status .badge');
+
+                    if (cellLast) cellLast.textContent = upd.last_booked_date;
+                    if (cellNext) cellNext.textContent = upd.next_eligible_date;
+                    if (badge) {
+                        badge.className = 'badge ' + upd.status_class;
+                        badge.textContent = upd.status_label;
+                    }
+                }
+
+                // 3. Prepend booking to history table (with XSS sanitization)
+                var table = document.getElementById('bookingHistoryTable');
+                var noHistory = document.getElementById('noHistoryMsg');
+                if (table) table.style.display = '';
+                if (noHistory) noHistory.style.display = 'none';
+
+                var h = result.data.history;
+                var tbody = document.getElementById('bookingHistoryBody');
+                if (tbody) {
+                    tbody.insertAdjacentHTML('afterbegin',
+                        '<tr>' +
+                        '<td>' + escapeHtml(h.booking_date) + '</td>' +
+                        '<td><span class="badge bg-info">' + escapeHtml(h.seva_name) + '</span></td>' +
+                        '<td>' + escapeHtml(h.remarks) + '</td>' +
+                        '<td>' + escapeHtml(h.creator) + '</td>' +
+                        '<td>' + escapeHtml(h.recorded_on) + '</td>' +
+                        '</tr>'
+                    );
+                }
+
+                // 4. Success Toast
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Saved!',
+                        text: result.data.message,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                }
+
+                // 5. Reset form and reset date to today
+                form.reset();
+                var dateInput = form.querySelector('input[name="booking_date"]');
+                if (dateInput) {
+                    dateInput.value = new Date().toISOString().split('T')[0];
+                }
+            } else if (result.status === 422 && result.data && result.data.errors) {
+                var errors = Object.values(result.data.errors).flat().join('\n');
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Validation Error',
+                        text: errors
+                    });
+                } else {
+                    alert(errors);
+                }
+            } else {
+                var msg = (result.data && result.data.message) ? result.data.message : 'Failed to save booking.';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: msg
+                    });
+                } else {
+                    alert(msg);
+                }
+            }
+        })
+        .catch(function () {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Network Error',
+                    text: 'Could not connect to the server. Please check your network and try again.'
+                });
+            } else {
+                alert('Could not connect to the server.');
+            }
+        })
+        .finally(function () {
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        });
+    });
+});
+</script>
+@endpush

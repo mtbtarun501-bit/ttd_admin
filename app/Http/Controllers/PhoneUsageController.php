@@ -124,15 +124,59 @@ class PhoneUsageController extends Controller
     public function storeBooking(StorePhoneUsageBookingRequest $request, PhoneUsage $phoneUsage)
     {
         $data = $request->validated();
-        
-        $this->phoneUsageService->addBooking(
+
+        $result           = $this->phoneUsageService->addBooking(
             $phoneUsage,
             $data['seva_type_id'],
             $data['booking_date'],
             $data['remarks'] ?? null,
             auth()->id()
         );
-        
-        return redirect()->route('phone-usages.show', $phoneUsage->id)->with('success', 'Booking recorded and eligibility updated.');
+
+        $history          = $result['history'];
+        $status           = $result['status'];
+        $seva             = $result['seva'];
+        $nextEligibleDate = $result['nextEligibleDate'];
+
+        // ── Determine the eligibility badge the UI should show ──────────────────
+        $today      = \Carbon\Carbon::today();
+        $isEligible = !$nextEligibleDate || $today->greaterThanOrEqualTo($nextEligibleDate);
+        $daysLeft   = $nextEligibleDate ? (int) $today->diffInDays($nextEligibleDate, false) : null;
+
+        if ($isEligible) {
+            $statusLabel = 'Eligible';
+            $statusClass = 'bg-success';
+        } elseif ($daysLeft !== null && $daysLeft <= 15) {
+            $statusLabel = 'Becomes Eligible Soon';
+            $statusClass = 'bg-warning text-dark';
+        } else {
+            $statusLabel = 'In Cooldown';
+            $statusClass = 'bg-danger';
+        }
+
+        // ── Return JSON for AJAX requests, redirect fallback for normal requests ──
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Booking recorded and eligibility updated.',
+                'history' => [
+                    'booking_date' => $history->booking_date->format('d M Y'),
+                    'seva_name'    => $seva->name,
+                    'remarks'      => $history->remarks ?: '-',
+                    'creator'      => auth()->user()->name ?? 'System',
+                    'recorded_on'  => $history->created_at->format('d M Y H:i'),
+                ],
+                'updated_status' => [
+                    'seva_type_id'       => $status->seva_type_id,
+                    'last_booked_date'   => $status->last_booked_date ? $status->last_booked_date->format('d M Y') : '-',
+                    'next_eligible_date' => $nextEligibleDate ? $nextEligibleDate->format('d M Y') : '-',
+                    'status_label'       => $statusLabel,
+                    'status_class'       => $statusClass,
+                ],
+            ]);
+        }
+
+        return redirect()->route('phone-usages.show', $phoneUsage->id)
+            ->with('success', 'Booking recorded and eligibility updated.');
     }
 }
