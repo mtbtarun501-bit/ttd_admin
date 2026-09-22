@@ -47,6 +47,7 @@ class PhoneUsageService
 
     /**
      * Calculate the next eligible date based on last booked date and cooldown.
+     * Includes a 5-day buffer (+5 days) for every seva type.
      */
     public function calculateNextEligibleDate(?Carbon $lastBookedDate, int $cooldownMonths): ?Carbon
     {
@@ -54,40 +55,70 @@ class PhoneUsageService
             return null; // Eligible immediately
         }
 
-        return $lastBookedDate->copy()->addMonths($cooldownMonths);
+        return $lastBookedDate->copy()->addMonths($cooldownMonths)->addDays(5);
     }
 
     /**
      * Add a booking to history and update the service status.
+     *
+     * WHY this structure:
+     *  1. SevaType is read OUTSIDE the transaction to keep lock duration as short as possible.
+     *  2. lockForUpdate() on status row prevents concurrent bookings from colliding.
+     *  3. max('booking_date') ensures backdated/past bookings do not corrupt eligibility.
+     *  4. Returns array with full context so controller avoids extra DB round-trips.
+     *
+     * @return array{history: PhoneUsageBookingHistory, status: PhoneUsageServiceStatus, seva: SevaType, nextEligibleDate: \Carbon\Carbon|null}
      */
-    public function addBooking(PhoneUsage $phoneUsage, int $sevaTypeId, string $bookingDateStr, ?string $remarks, ?int $userId = null): PhoneUsageBookingHistory
+    public function addBooking(PhoneUsage $phoneUsage, int $sevaTypeId, string $bookingDateStr, ?string $remarks, ?int $userId = null): array
     {
-        return DB::transaction(function () use ($phoneUsage, $sevaTypeId, $bookingDateStr, $remarks, $userId) {
-            $bookingDate = Carbon::parse($bookingDateStr);
-            $seva = SevaType::findOrFail($sevaTypeId);
+        $bookingDate = Carbon::parse($bookingDateStr);
+        $seva        = SevaType::findOrFail($sevaTypeId);
 
-            // Add history
+        return DB::transaction(function () use ($phoneUsage, $sevaTypeId, $bookingDate, $seva, $remarks, $userId) {
+            // 1. Append to booking history
             $history = PhoneUsageBookingHistory::create([
                 'phone_usage_id' => $phoneUsage->id,
-                'seva_type_id' => $sevaTypeId,
-                'booking_date' => $bookingDate,
-                'remarks' => $remarks,
-                'created_by' => $userId,
+                'seva_type_id'   => $sevaTypeId,
+                'booking_date'   => $bookingDate,
+                'remarks'        => $remarks,
+                'created_by'     => $userId,
             ]);
 
-            // Update status
+            // 2. Lock the status row for this phone + seva
             $status = PhoneUsageServiceStatus::where('phone_usage_id', $phoneUsage->id)
                 ->where('seva_type_id', $sevaTypeId)
-                ->firstOrFail();
+                ->lockForUpdate()
+                ->first();
 
-            $nextEligibleDate = $this->calculateNextEligibleDate($bookingDate, $seva->cooldown_months);
+            // 3. Determine the true latest booking date (protects against backdated entries)
+            $latestBookingDate = PhoneUsageBookingHistory::where('phone_usage_id', $phoneUsage->id)
+                ->where('seva_type_id', $sevaTypeId)
+                ->max('booking_date');
 
-            $status->update([
-                'last_booked_date' => $bookingDate,
-                'next_eligible_date' => $nextEligibleDate,
-            ]);
+            $latestBookingDate = $latestBookingDate ? Carbon::parse($latestBookingDate) : $bookingDate;
+            $nextEligibleDate   = $this->calculateNextEligibleDate($latestBookingDate, $seva->cooldown_months);
 
-            return $history;
+            // 4. Update or create status record
+            if (!$status) {
+                $status = PhoneUsageServiceStatus::create([
+                    'phone_usage_id'    => $phoneUsage->id,
+                    'seva_type_id'      => $sevaTypeId,
+                    'last_booked_date'  => $latestBookingDate,
+                    'next_eligible_date'=> $nextEligibleDate,
+                ]);
+            } else {
+                $status->update([
+                    'last_booked_date'  => $latestBookingDate,
+                    'next_eligible_date'=> $nextEligibleDate,
+                ]);
+            }
+
+            return [
+                'history'          => $history,
+                'status'           => $status,
+                'seva'             => $seva,
+                'nextEligibleDate' => $nextEligibleDate,
+            ];
         });
     }
 
