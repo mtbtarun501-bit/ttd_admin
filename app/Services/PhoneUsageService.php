@@ -47,6 +47,7 @@ class PhoneUsageService
 
     /**
      * Calculate the next eligible date based on last booked date and cooldown.
+     * Includes a 5-day buffer (+5 days) for every seva type.
      */
     public function calculateNextEligibleDate(?Carbon $lastBookedDate, int $cooldownMonths): ?Carbon
     {
@@ -54,7 +55,7 @@ class PhoneUsageService
             return null; // Eligible immediately
         }
 
-        return $lastBookedDate->copy()->addMonths($cooldownMonths);
+        return $lastBookedDate->copy()->addMonths($cooldownMonths)->addDays(5);
     }
 
     /**

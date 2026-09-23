@@ -78,7 +78,7 @@
                             <tbody>
                                 @foreach($phoneUsage->serviceStatuses->sortBy('sevaType.display_order') as $status)
                                 <tr data-seva-id="{{ $status->seva_type_id }}">
-                                    <td><strong>{{ $status->sevaType->name }}</strong> <br><small class="text-muted">{{ $status->sevaType->cooldown_months }}m cooldown</small></td>
+                                    <td><strong>{{ $status->sevaType->name }}</strong> <br><small class="text-muted">{{ $status->sevaType->cooldown_months }}m + 5d cooldown</small></td>
                                     <td class="cell-last-booked">{{ $status->last_booked_date ? $status->last_booked_date->format('d M Y') : 'Never' }}</td>
                                     <td class="cell-next-eligible">{{ $status->next_eligible_date ? $status->next_eligible_date->format('d M Y') : '-' }}</td>
                                     <td class="cell-status">

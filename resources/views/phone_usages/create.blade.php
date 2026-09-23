@@ -49,7 +49,7 @@
                 <div class="row">
                     @foreach($sevas as $seva)
                     <div class="col-md-4 mb-3">
-                        <label class="form-label">{{ $seva->name }} <br><small class="text-muted">Cooldown: {{ $seva->cooldown_months }} Months</small></label>
+                        <label class="form-label">{{ $seva->name }} <br><small class="text-muted">Cooldown: {{ $seva->cooldown_months }} Months + 5 Days</small></label>
                         <input type="date" name="seva_dates[{{ $seva->id }}]" class="form-control @error('seva_dates.'.$seva->id) is-invalid @enderror" value="{{ old('seva_dates.'.$seva->id) }}">
                         @error('seva_dates.'.$seva->id)<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
