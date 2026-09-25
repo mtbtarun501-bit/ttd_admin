@@ -196,11 +196,37 @@
 @push('scripts')
 <script>
 /**
- * Instant Async Booking Form (Direct AJAX + Transactional Locking)
+ * Zero-Latency Optimistic Booking Engine with 3 Reliability Safeguards
+ *
+ * 1. 0ms Immediate UI: Modal hides instantly (0ms), table prepends row (0ms),
+ *    and matrix updates to temporary syncing state without waiting for network.
+ * 2. Safeguard 1 (Tab-Close Guard): window.beforeunload blocks closing the tab
+ *    while a background sync is in progress.
+ * 3. Safeguard 2 (Syncing State): Row displays a distinct "Saving..." badge until
+ *    Supabase returns 200 OK, then transitions to confirmed recorded timestamp.
+ * 4. Safeguard 3 (Auto-Rollback & Backup): If Supabase rejects (cooldown, validation,
+ *    or network drop), table and matrix cleanly revert to snapshot, backup is saved
+ *    to sessionStorage, and modal re-opens with form inputs intact.
  */
 document.addEventListener('DOMContentLoaded', function () {
     var form = document.getElementById('addBookingForm');
     if (!form) return;
+
+    var modalEl = document.getElementById('addBookingModal');
+    var modalInstance = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+
+    // Active sync counter for Safeguard 1
+    window._activeSyncCount = 0;
+
+    function handleBeforeUnload(e) {
+        if (window._activeSyncCount > 0) {
+            e.preventDefault();
+            e.returnValue = 'A booking is currently being saved to the database. Leaving now may cause data loss!';
+            return e.returnValue;
+        }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     function escapeHtml(str) {
         if (!str) return '-';
@@ -209,18 +235,102 @@ document.addEventListener('DOMContentLoaded', function () {
         return div.innerHTML;
     }
 
+    function formatDateDMY(dateStr) {
+        if (!dateStr) return '';
+        var parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        var day = parts[2];
+        var monthIdx = parseInt(parts[1], 10) - 1;
+        var year = parts[0];
+        return day + ' ' + (months[monthIdx] || parts[1]) + ' ' + year;
+    }
+
     form.addEventListener('submit', function (e) {
         e.preventDefault();
 
-        var btn = form.querySelector('button[type=submit]');
-        var originalHTML = btn.innerHTML;
+        var sevaSelect = form.querySelector('select[name="seva_type_id"]');
+        var dateInput = form.querySelector('input[name="booking_date"]');
+        var remarksInput = form.querySelector('textarea[name="remarks"]');
 
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+        var sevaId = sevaSelect.value;
+        var sevaName = sevaSelect.options[sevaSelect.selectedIndex] ? sevaSelect.options[sevaSelect.selectedIndex].text : 'Seva';
+        var bookingDateStr = dateInput.value;
+        var formattedDate = formatDateDMY(bookingDateStr);
+        var remarks = remarksInput.value.trim();
+        var currentUser = "{{ auth()->user()->name ?? 'System' }}";
 
+        if (!sevaId || !bookingDateStr) {
+            return;
+        }
+
+        // ── 1. Create a Snapshot of Eligibility Row in case we need to Rollback ─
+        var matrixRow = document.querySelector('tr[data-seva-id="' + sevaId + '"]');
+        var rowSnapshot = null;
+        if (matrixRow) {
+            rowSnapshot = {
+                lastBooked: matrixRow.querySelector('.cell-last-booked').innerHTML,
+                nextEligible: matrixRow.querySelector('.cell-next-eligible').innerHTML,
+                statusBadge: matrixRow.querySelector('.cell-status').innerHTML
+            };
+
+            // 0ms Optimistic Update on Eligibility Row
+            matrixRow.querySelector('.cell-last-booked').textContent = formattedDate;
+            matrixRow.querySelector('.cell-next-eligible').innerHTML = '<span class="text-muted"><i class="fas fa-spinner fa-spin me-1"></i> Updating...</span>';
+            matrixRow.querySelector('.cell-status').innerHTML = '<span class="badge bg-secondary"><i class="fas fa-spinner fa-spin me-1"></i> Syncing...</span>';
+        }
+
+        // ── 2. Prepend Optimistic Row to Booking History Table (0ms) ───────────
+        var tempRowId = 'opt-booking-' + Date.now();
+        var table = document.getElementById('bookingHistoryTable');
+        var noHistory = document.getElementById('noHistoryMsg');
+        var tbody = document.getElementById('bookingHistoryBody');
+
+        if (table) table.style.display = '';
+        if (noHistory) noHistory.style.display = 'none';
+
+        if (tbody) {
+            tbody.insertAdjacentHTML('afterbegin',
+                '<tr id="' + tempRowId + '" class="table-warning-subtle">' +
+                '<td>' + escapeHtml(formattedDate) + '</td>' +
+                '<td><span class="badge bg-info">' + escapeHtml(sevaName) + '</span></td>' +
+                '<td>' + escapeHtml(remarks || '-') + '</td>' +
+                '<td>' + escapeHtml(currentUser) + '</td>' +
+                '<td class="cell-recorded-sync"><span class="badge bg-warning text-dark"><i class="fas fa-spinner fa-spin me-1"></i> Saving...</span></td>' +
+                '</tr>'
+            );
+        }
+
+        // ── 3. Close Modal IMMEDIATELY (0ms — Zero Waiting!) ──────────────────
+        modalInstance.hide();
+
+        // Prepare form data for background fetch
+        var formData = new FormData(form);
+
+        // Reset form and set default date to today
+        form.reset();
+        dateInput.value = new Date().toISOString().split('T')[0];
+
+        // ── 4. Safeguard 1: Increment Active Sync Count ────────────────────────
+        window._activeSyncCount++;
+
+        // Non-intrusive toast informing user of background sync
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'info',
+                title: 'Booking Queued',
+                text: 'Saving to database in background...',
+                timer: 1500,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+        }
+
+        // ── 5. Background Sync to Supabase ─────────────────────────────────────
         fetch(form.action, {
             method: 'POST',
-            body: new FormData(form),
+            body: formData,
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Accept': 'application/json'
@@ -237,108 +347,110 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         })
         .then(function (result) {
+            window._activeSyncCount = Math.max(0, window._activeSyncCount - 1);
+
             if (result.ok && result.data && result.data.success) {
-                // 1. Close Modal
-                var modalEl = document.getElementById('addBookingModal');
-                var modalInstance = bootstrap.Modal.getInstance(modalEl);
-                if (!modalInstance) {
-                    modalInstance = new bootstrap.Modal(modalEl);
-                }
-                modalInstance.hide();
-
-                // 2. Update eligibility matrix row
-                var upd = result.data.updated_status;
-                var row = document.querySelector('tr[data-seva-id="' + upd.seva_type_id + '"]');
-                if (row) {
-                    var cellLast = row.querySelector('.cell-last-booked');
-                    var cellNext = row.querySelector('.cell-next-eligible');
-                    var badge = row.querySelector('.cell-status .badge');
-
-                    if (cellLast) cellLast.textContent = upd.last_booked_date;
-                    if (cellNext) cellNext.textContent = upd.next_eligible_date;
-                    if (badge) {
-                        badge.className = 'badge ' + upd.status_class;
-                        badge.textContent = upd.status_label;
+                // ── SUCCESS: Confirm Row & Apply Final Server Data ─────────────
+                var optRow = document.getElementById(tempRowId);
+                if (optRow) {
+                    optRow.classList.remove('table-warning-subtle');
+                    var syncCell = optRow.querySelector('.cell-recorded-sync');
+                    if (syncCell) {
+                        syncCell.innerHTML = escapeHtml(result.data.history.recorded_on);
                     }
                 }
 
-                // 3. Prepend booking to history table (with XSS sanitization)
-                var table = document.getElementById('bookingHistoryTable');
-                var noHistory = document.getElementById('noHistoryMsg');
-                if (table) table.style.display = '';
-                if (noHistory) noHistory.style.display = 'none';
-
-                var h = result.data.history;
-                var tbody = document.getElementById('bookingHistoryBody');
-                if (tbody) {
-                    tbody.insertAdjacentHTML('afterbegin',
-                        '<tr>' +
-                        '<td>' + escapeHtml(h.booking_date) + '</td>' +
-                        '<td><span class="badge bg-info">' + escapeHtml(h.seva_name) + '</span></td>' +
-                        '<td>' + escapeHtml(h.remarks) + '</td>' +
-                        '<td>' + escapeHtml(h.creator) + '</td>' +
-                        '<td>' + escapeHtml(h.recorded_on) + '</td>' +
-                        '</tr>'
-                    );
+                // Update Eligibility Matrix with exact server-verified calculations
+                if (matrixRow && result.data.updated_status) {
+                    var upd = result.data.updated_status;
+                    matrixRow.querySelector('.cell-last-booked').textContent = upd.last_booked_date;
+                    matrixRow.querySelector('.cell-next-eligible').textContent = upd.next_eligible_date;
+                    matrixRow.querySelector('.cell-status').innerHTML = '<span class="badge ' + upd.status_class + '">' + upd.status_label + '</span>';
                 }
 
-                // 4. Success Toast
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         icon: 'success',
                         title: 'Saved!',
-                        text: result.data.message,
+                        text: 'Booking confirmed and recorded in database.',
                         timer: 2000,
-                        showConfirmButton: false
+                        showConfirmButton: false,
+                        toast: true,
+                        position: 'top-end'
                     });
-                }
-
-                // 5. Reset form and reset date to today
-                form.reset();
-                var dateInput = form.querySelector('input[name="booking_date"]');
-                if (dateInput) {
-                    dateInput.value = new Date().toISOString().split('T')[0];
-                }
-            } else if (result.status === 422 && result.data && result.data.errors) {
-                var errors = Object.values(result.data.errors).flat().join('\n');
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Validation Error',
-                        text: errors
-                    });
-                } else {
-                    alert(errors);
                 }
             } else {
-                var msg = (result.data && result.data.message) ? result.data.message : 'Failed to save booking.';
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: msg
-                    });
-                } else {
-                    alert(msg);
+                // ── ERROR / REJECTION: Trigger Safeguard 3 (Auto-Rollback) ──────
+                var errorMsg = 'Failed to save booking.';
+                if (result.status === 422 && result.data && result.data.errors) {
+                    errorMsg = Object.values(result.data.errors).flat().join('<br>');
+                } else if (result.data && result.data.message) {
+                    errorMsg = result.data.message;
                 }
+
+                rollbackBooking(tempRowId, matrixRow, rowSnapshot, sevaId, bookingDateStr, remarks, errorMsg);
             }
         })
         .catch(function () {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Network Error',
-                    text: 'Could not connect to the server. Please check your network and try again.'
-                });
-            } else {
-                alert('Could not connect to the server.');
-            }
-        })
-        .finally(function () {
-            btn.disabled = false;
-            btn.innerHTML = originalHTML;
+            window._activeSyncCount = Math.max(0, window._activeSyncCount - 1);
+            rollbackBooking(tempRowId, matrixRow, rowSnapshot, sevaId, bookingDateStr, remarks, 'Network connection dropped. Could not reach server.');
         });
     });
+
+    function rollbackBooking(tempRowId, matrixRow, rowSnapshot, sevaId, bookingDateStr, remarks, errorMsg) {
+        // 1. Remove optimistic row from history table
+        var optRow = document.getElementById(tempRowId);
+        if (optRow) {
+            optRow.remove();
+        }
+
+        // Check if table is now empty
+        var tbody = document.getElementById('bookingHistoryBody');
+        var table = document.getElementById('bookingHistoryTable');
+        var noHistory = document.getElementById('noHistoryMsg');
+        if (tbody && tbody.children.length === 0) {
+            if (table) table.style.display = 'none';
+            if (noHistory) noHistory.style.display = '';
+        }
+
+        // 2. Revert eligibility matrix row to snapshot
+        if (matrixRow && rowSnapshot) {
+            matrixRow.querySelector('.cell-last-booked').innerHTML = rowSnapshot.lastBooked;
+            matrixRow.querySelector('.cell-next-eligible').innerHTML = rowSnapshot.nextEligible;
+            matrixRow.querySelector('.cell-status').innerHTML = rowSnapshot.statusBadge;
+        }
+
+        // 3. Save backup in sessionStorage so data is never lost
+        try {
+            sessionStorage.setItem('failed_booking_backup', JSON.stringify({
+                seva_type_id: sevaId,
+                booking_date: bookingDateStr,
+                remarks: remarks,
+                failed_at: new Date().toISOString()
+            }));
+        } catch(e) {}
+
+        // 4. Alert operator and provide 1-click reopen to edit/retry
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Booking Not Saved',
+                html: '<div class="text-danger mb-2"><b>' + errorMsg + '</b></div><small class="text-muted">The database could not accept this booking. Table state has been safely reverted.</small>',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-redo me-1"></i> Reopen & Edit Form',
+                cancelButtonText: 'Dismiss'
+            }).then(function (res) {
+                if (res.isConfirmed) {
+                    form.querySelector('select[name="seva_type_id"]').value = sevaId;
+                    form.querySelector('input[name="booking_date"]').value = bookingDateStr;
+                    form.querySelector('textarea[name="remarks"]').value = remarks;
+                    modalInstance.show();
+                }
+            });
+        } else {
+            alert('Booking failed: ' + errorMsg);
+        }
+    }
 });
 </script>
 @endpush
