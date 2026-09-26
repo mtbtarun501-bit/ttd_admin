@@ -97,5 +97,9 @@ Three operators click "Save Booking" simultaneously:
 ### 3. `resources/views/phone_usages/show.blade.php`
 * Added unique targeting identifiers (`id="bookingHistoryTable"`, `id="bookingHistoryBody"`, `id="noHistoryMsg"`).
 * Added `data-seva-id` attributes to eligibility matrix table rows for in-place DOM updates.
+* **0ms Optimistic UI:** Immediately closes modal (0ms), prepends optimistic row (0ms), and updates matrix status to "Syncing..." (0ms) without blocking operator.
+* **Safeguard 1 (Tab-Close Blocker):** Attaches `window.beforeunload` warning while background sync is active to prevent data loss.
+* **Safeguard 2 (Visual Sync State):** Clearly tags new booking as "Saving..." until confirmed by Supabase.
+* **Safeguard 3 (Auto-Rollback & Backup):** On rejection, automatically rolls back table and matrix state, saves failed payload to `sessionStorage`, and provides 1-click modal reopen with intact inputs.
 * Sanitized user input using client-side HTML entity escaping (`escapeHtml`) to neutralize Stored XSS vulnerabilities.
 * Validated server response `content-type` headers to prevent JSON parse exceptions during potential HTTP 500/502 server errors.

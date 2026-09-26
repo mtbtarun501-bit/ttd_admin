@@ -90,13 +90,17 @@ class PhoneUsageService
                 ->lockForUpdate()
                 ->first();
 
-            // 3. Determine the true latest booking date (protects against backdated entries)
-            $latestBookingDate = PhoneUsageBookingHistory::where('phone_usage_id', $phoneUsage->id)
-                ->where('seva_type_id', $sevaTypeId)
-                ->max('booking_date');
+            // 3. Determine the true latest booking date (skips redundant DB query when booking is today/newer)
+            if ($status && $status->last_booked_date && $status->last_booked_date->greaterThan($bookingDate)) {
+                $latestBookingDate = PhoneUsageBookingHistory::where('phone_usage_id', $phoneUsage->id)
+                    ->where('seva_type_id', $sevaTypeId)
+                    ->max('booking_date');
+                $latestBookingDate = $latestBookingDate ? Carbon::parse($latestBookingDate) : $bookingDate;
+            } else {
+                $latestBookingDate = $bookingDate;
+            }
 
-            $latestBookingDate = $latestBookingDate ? Carbon::parse($latestBookingDate) : $bookingDate;
-            $nextEligibleDate   = $this->calculateNextEligibleDate($latestBookingDate, $seva->cooldown_months);
+            $nextEligibleDate = $this->calculateNextEligibleDate($latestBookingDate, $seva->cooldown_months);
 
             // 4. Update or create status record
             if (!$status) {
